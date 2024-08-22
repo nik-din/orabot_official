@@ -1,0 +1,5 @@
+fastapi
+psycopg2
+pyTelegramBotAPI
+requests
+uvicorn
