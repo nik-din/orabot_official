@@ -121,7 +121,14 @@ def testo(message):
             break
 
     if statement['success'] == 1:
-        bot.send_document(message.chat.id, 'https://training.olinfo.it/api/files/' + statement['statements']['it'] + '/testo.pdf', message.id, name + '\n' + str(statement['time_limit']) + ' sec\n' + str(statement['memory_limit']/1048576) + ' MiB')
+        link = 'https://training.olinfo.it/api/files/' + statement['statements']['it'] + '/testo.pdf'
+        tl = str(statement['time_limit']) + ' sec'
+        ml = str(statement['memory_limit']/1048576) + ' MiB'
+        pt = str(round(statement['score_multiplier']*100)) + ' punti'
+        tg = ''
+        for tag in statement['tags']:
+            tg += '<span class="tg-spoiler">' + tag['name'] + '</span> '
+        bot.send_document(message.chat.id, link, message.id, name + '\n' + pt + '\n' + tl + '\n' + ml + '\n' + tg, parse_mode='HTML')
     else:
         bot.reply_to(message, 'Nome del problema sbagliato. Riprovare.')
 
