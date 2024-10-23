@@ -20,7 +20,7 @@ length = 0
 answer = ''
 
 def get_text(message):
-    words = message.split()
+    words = message.replace('\n', ' \n').split()
     return ' '.join(words[1:])
 
 @bot.message_handler(commands=['start'])
