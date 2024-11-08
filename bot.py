@@ -124,11 +124,12 @@ def testo(message):
         link = 'https://training.olinfo.it/api/files/' + statement['statements']['it'] + '/testo.pdf'
         tl = str(statement['time_limit']) + ' sec'
         ml = str(statement['memory_limit']/1048576) + ' MiB'
-        pt = str(round(statement['score_multiplier']*100)) + ' punti'
-        tg = ''
-        for tag in statement['tags']:
-            tg += '<span class="tg-spoiler">' + tag['name'] + '</span> '
-        bot.send_document(message.chat.id, link, message.id, name + '\n' + pt + '\n' + tl + '\n' + ml + '\n' + tg, parse_mode='HTML')
+        # pt = str(round(statement['score_multiplier']*100)) + ' punti'
+        # tg = ''
+        # for tag in statement['tags']:
+            # tg += '<span class="tg-spoiler">' + tag['name'] + '</span> '
+        # bot.send_document(message.chat.id, link, message.id, name + '\n' + pt + '\n' + tl + '\n' + ml + '\n' + tg, parse_mode='HTML')
+        bot.send_document(message.chat.id, link, message.id, name + '\n' + tl + '\n' + ml)
     else:
         bot.reply_to(message, 'Nome del problema sbagliato. Riprovare.')
 
