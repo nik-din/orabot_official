@@ -121,7 +121,8 @@ def testo(message):
             break
 
     if statement['success'] == 1:
-        link = 'https://training.olinfo.it/api/files/' + statement['statements']['it'] + '/testo.pdf'
+        ids = statement['statements']
+        link = 'https://training.olinfo.it/api/files/' + (ids['it'] if 'it' in ids.keys() else ids['en']) + '/testo.pdf'
         tl = str(statement['time_limit']) + ' sec'
         ml = str(statement['memory_limit']/1048576) + ' MiB'
         pt = '<span class="tg-spoiler">' + str(round(statement['score_multiplier']*100)) + ' punti</span>'
