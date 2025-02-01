@@ -94,7 +94,7 @@ def ans(message):
         if get_text(message.text) == answer:
             bot.reply_to(message, 'Corretto!', reply_markup=markup)
         else:
-            bot.reply_to(message, 'Sbagliato!', reply_markup=markup)
+            bot.reply_to(message, 'Errato! La risposta corretta è __' + answer.replace('_', ' ') + '__', reply_markup=markup)
         answer = ''
 
 @bot.message_handler(commands=['testo'])
