@@ -39,7 +39,7 @@ def start(message):
 
 @bot.message_handler(commands=['ciao'])
 def ciao(message):
-    bot.reply_to(message, 'Buondì!')
+    bot.reply_to(message, 'Buondì! __test__ **test** ||test|| prova')
 
 @bot.message_handler(commands=['ora'])
 def ora(message):
