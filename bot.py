@@ -16,7 +16,6 @@ user = os.environ.get('DB_USER')
 pwd = os.environ.get('DB_PASSWORD')
 
 started = False
-length = 0
 answer = ''
 
 def get_text(message):
@@ -25,17 +24,7 @@ def get_text(message):
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    global started
-    if started == False:
-        with psycopg2.connect(host=host,database=db, user=user, password=pwd) as conn:
-            with conn.cursor() as cur:
-                cur.execute('SELECT * FROM random_array')
-                global length
-                length = cur.rowcount
-        started = True
-        bot.reply_to(message, 'Il bot è stato inizializzato correttamente.')
-    else:
-        bot.reply_to(message, 'Il bot è già stato inizializzato.')
+    bot.reply_to(message, '...')
 
 @bot.message_handler(commands=['ciao'])
 def ciao(message):
@@ -54,7 +43,7 @@ def johnson(message):
 def random_(message):
     with psycopg2.connect(host=host, database=db, user=user, password=pwd) as conn:
         with conn.cursor() as cur:
-            cur.execute('SELECT frase FROM random_array OFFSET floor(random()*(%s)) LIMIT 1', (length, ))
+            cur.execute('SELECT frase FROM random ORDER BY RANDOM() LIMIT 1')
             bot.reply_to(message, cur.fetchone())
 
 @bot.message_handler(commands=['add_random'])
@@ -65,9 +54,11 @@ def add_random(message):
     if text != '':
         with psycopg2.connect(host=host, database=db, user=user,password=pwd) as conn:
             with conn.cursor() as cur:
-                cur.execute('INSERT INTO random_array(frase) VALUES(%s) RETURNING random_id', (text,))
-        length += 1
-        bot.reply_to(message, 'Aggiunto!')
+                try:
+                    cur.execute('INSERT INTO random (frase) VALUES (%s)', (text,))
+                    bot.reply_to(message, 'Aggiunto!')
+                except:
+                    bot.reply_to(message, 'Questa frase è già stata inserita!')
     else:
         bot.reply_to(message, 'Inserire un messaggio.')
 
@@ -94,7 +85,7 @@ def ans(message):
         if get_text(message.text) == answer:
             bot.reply_to(message, 'Corretto!', reply_markup=markup)
         else:
-            bot.reply_to(message, 'Sbagliato!', reply_markup=markup)
+            bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '', reply_markup=markup)
         answer = ''
 
 @bot.message_handler(commands=['testo'])
