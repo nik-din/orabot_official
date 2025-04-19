@@ -29,6 +29,7 @@ def start(message):
 
 @bot.message_handler(commands=['ciao'])
 def ciao(message):
+    print(message.chat.id + '\n' + message.id + '\n')
     bot.reply_to(message, 'Buondì!')
 
 @bot.message_handler(commands=['sveglia'])
@@ -130,5 +131,4 @@ def testo(message):
     else:
         bot.reply_to(message, 'Nome del problema sbagliato. Riprovare.')
 
-schedule.every().day.at('14:42').do(sveglia)
 bot.infinity_polling()
