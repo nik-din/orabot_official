@@ -14,7 +14,6 @@ db = os.environ.get('DB')
 host = os.environ.get('DB_HOST')
 user = os.environ.get('DB_USER')
 pwd = os.environ.get('DB_PASSWORD')
-chat_id = os.environ.get('CID')
 
 started = False
 answer = ''
@@ -29,12 +28,9 @@ def start(message):
 
 @bot.message_handler(commands=['ciao'])
 def ciao(message):
-    print(message.chat.id + '\n' + message.id + '\n')
+    print(message.chat.id)
+    print(message.id)
     bot.reply_to(message, 'Buondì!')
-
-@bot.message_handler(commands=['sveglia'])
-def sveglia():
-    bot.send_message(chat_id, 'Sono sveglio!')
 
 @bot.message_handler(commands=['ora'])
 def ora(message):
