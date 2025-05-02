@@ -7,6 +7,12 @@ import telebot
 
 from johnson import johnson_image
 
+from keep_alive_ping import create_service
+
+service = create_service(ping_interval=600)
+
+
+
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(BOT_TOKEN)
 
