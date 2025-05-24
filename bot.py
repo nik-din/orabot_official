@@ -44,8 +44,17 @@ def ora(message):
 
 @bot.message_handler(commands=['johnson'])
 def johnson(message):
-    solid = random.choice(johnson_image).capitalize()
-    bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + solid + '.png', solid.replace('_', ' '), reply_to_message_id=message.id)
+    global lenght
+    text = get_text(message.text)
+
+    if text == '':
+        solid = random.choice(johnson_image).capitalize()
+        bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + solid + '.png', solid.replace('_', ' '), reply_to_message_id=message.id)
+    elif text in johnson_image:
+        solid = text
+        bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + solid + '.png', solid.replace('_', ' '), reply_to_message_id=message.id)
+    else:
+        bot.reply_to(message, 'Solido non valido.')
 
 @bot.message_handler(commands=['random'])
 def random_(message):
