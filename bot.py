@@ -4,6 +4,8 @@ import psycopg2
 import random
 import requests
 import telebot
+import sqlite3
+from telebot.types import InlineQueryResultArticle, InputTextMessageContent
 
 from johnson import johnson_image
 
@@ -23,6 +25,74 @@ pwd = os.environ.get('DB_PASSWORD')
 
 started = False
 answer = ''
+
+conn = sqlite3.connect('bot_data.db', check_same_thread=False)
+cur = conn.cursor()
+
+cur.execute('''
+CREATE TABLE IF NOT EXISTS user_scores (
+    user_id INTEGER PRIMARY KEY,
+    username TEXT,
+    points INTEGER NOT NULL DEFAULT 0
+)
+''')
+conn.commit()
+
+def update_points(user_id, delta, username=None):
+    cur.execute('SELECT points FROM user_scores WHERE user_id = ?', (user_id,))
+    row = cur.fetchone()
+    if row:
+        new_points = row[0] + delta
+        cur.execute('UPDATE user_scores SET points = ?, username = ? WHERE user_id = ?', (new_points, username, user_id))
+    else:
+        cur.execute('INSERT INTO user_scores (user_id, username, points) VALUES (?, ?, ?)', (user_id, username, delta))
+    conn.commit()
+
+def get_points(user_id):
+    cur.execute('SELECT points FROM user_scores WHERE user_id = ?', (user_id,))
+    row = cur.fetchone()
+    return row[0] if row else 0
+
+@bot.message_handler(commands=['punti'])
+def mypoints(message):
+    pts = get_points(message.chat.id)
+    bot.reply_to(message, f"Hai {pts} punti di Johnson.")
+
+
+@bot.message_handler(commands=['classifica'])
+def classifica(message):
+    cur.execute('SELECT username, points FROM user_scores ORDER BY points DESC LIMIT 12')
+    rows = cur.fetchall()
+    
+    if not rows:
+        bot.reply_to(message, 'Nessun utente trovato.')
+        return
+    
+    ranking = "Classifica di Johnson:\n"
+    ranking += "--------------------------\n"
+    for username, points in rows:
+        username = username or 'Utente sconosciuto'
+        ranking += f"{username}: {points}\n"
+
+    bot.reply_to(message, ranking)
+
+@bot.inline_handler(func=lambda query: query.query.startswith('johnson'))
+def query_johnson(inline_query):
+    query_text = inline_query.query[len('johnson'):].strip().lower().replace(' ', '_')
+
+    results = []
+    for solid in johnson_image:
+        if query_text in solid:
+            results.append(
+                InlineQueryResultArticle(
+                    id=solid,
+                    title=solid.replace('_', ' ').capitalize(),
+                    input_message_content=InputTextMessageContent(f'/johnson {solid}')
+                )
+            )
+    results = results[:20]
+    bot.answer_inline_query(inline_query.id, results)
+
 
 def get_text(message):
     words = message.replace('\n', ' \n').split()
@@ -44,8 +114,24 @@ def ora(message):
 
 @bot.message_handler(commands=['johnson'])
 def johnson(message):
-    solid = random.choice(johnson_image).capitalize()
-    bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + solid + '.png', solid.replace('_', ' '), reply_to_message_id=message.id)
+    global lenght
+    text = get_text(message.text)
+    textl = text.split()
+    for i in range(len(textl)):
+        textl[i] = textl[i].lower()
+        if i == 0:
+            text = textl[i]
+        else:
+            text += '_' + textl[i]  
+
+    if text == '':
+        solid = random.choice(johnson_image).capitalize()
+        bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + solid + '.png', solid.replace('_', ' '), reply_to_message_id=message.id)
+    elif text in johnson_image:
+        solid = text.capitalize()
+        bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + solid + '.png', solid.replace('_', ' '), reply_to_message_id=message.id)
+    else:
+        bot.reply_to(message, 'Solido non valido.')
 
 @bot.message_handler(commands=['random'])
 def random_(message):
@@ -91,6 +177,9 @@ def ans(message):
     else:
         markup = telebot.types.ReplyKeyboardRemove(selective=False)
         if get_text(message.text) == answer:
+            user_id = message.chat.id
+            username = message.from_user.username or 'Utente'
+            update_points(user_id, 1, username)
             bot.reply_to(message, 'Corretto!', reply_markup=markup)
         else:
             bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '', reply_markup=markup)
