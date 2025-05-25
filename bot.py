@@ -114,7 +114,7 @@ def ora(message):
 
 @bot.message_handler(commands=['johnson'])
 def johnson(message):
-    global lenght
+    global length
     text = get_text(message.text)
     textl = text.split()
     for i in range(len(textl)):
