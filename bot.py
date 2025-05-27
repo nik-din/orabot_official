@@ -38,15 +38,45 @@ CREATE TABLE IF NOT EXISTS user_scores (
 ''')
 conn.commit()
 
-def update_points(user_id, delta, username=None):
-    cur.execute('SELECT points FROM user_scores WHERE user_id = ?', (user_id,))
+def table_needs_reset():
+    cur.execute("PRAGMA table_info(user_scores)")
+    columns = [col[1] for col in cur.fetchall()]
+    expected_columns = {'user_id', 'username', 'points', 'correct_answers', 'wrong_answers'}
+    return not expected_columns.issubset(set(columns))
+
+if table_needs_reset():
+    cur.execute("DROP TABLE IF EXISTS user_scores")
+    cur.execute('''
+        CREATE TABLE user_scores (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            points INTEGER NOT NULL DEFAULT 0,
+            correct_answers INTEGER NOT NULL DEFAULT 0,
+            wrong_answers INTEGER NOT NULL DEFAULT 0
+        )
+    ''')
+    conn.commit()
+
+def update_points(user_id, delta, username=None, correct=False, wrong=False):
+    cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = ?', (user_id,))
     row = cur.fetchone()
     if row:
-        new_points = row[0] + delta
-        cur.execute('UPDATE user_scores SET points = ?, username = ? WHERE user_id = ?', (new_points, username, user_id))
+        new_points = max(0, row[0] + delta)
+        correct_count = row[1] + (1 if correct else 0)
+        wrong_count = row[2] + (1 if wrong else 0)
+        cur.execute('''
+            UPDATE user_scores 
+            SET points = ?, username = ?, correct_answers = ?, wrong_answers = ? 
+            WHERE user_id = ?
+        ''', (new_points, username, correct_count, wrong_count, user_id))
     else:
-        cur.execute('INSERT INTO user_scores (user_id, username, points) VALUES (?, ?, ?)', (user_id, username, delta))
+        initial_points = max(0, delta)
+        cur.execute('''
+            INSERT INTO user_scores (user_id, username, points, correct_answers, wrong_answers) 
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, username, initial_points, 1 if correct else 0, 1 if wrong else 0))
     conn.commit()
+
 
 def get_points(user_id):
     cur.execute('SELECT points FROM user_scores WHERE user_id = ?', (user_id,))
@@ -54,9 +84,38 @@ def get_points(user_id):
     return row[0] if row else 0
 
 @bot.message_handler(commands=['punti'])
-def mypoints(message):
-    pts = get_points(message.chat.id)
-    bot.reply_to(message, f"Hai {pts} punti di Johnson.")
+def punti(message):
+    user_id = message.from_user.id
+    cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = ?', (user_id,))
+    row = cur.fetchone()
+    if row:
+        points, correct, wrong = row
+        bot.reply_to(message, f"Hai {points} punti di Johnson.\nRisposte corrette: {correct}\nRisposte sbagliate: {wrong}")
+    else:
+        bot.reply_to(message, "Non ci sono abbastanza dati su di te.")
+
+@bot.message_handler(commands=['skill'])
+def skill(message):
+    cur.execute('''
+        SELECT username, correct_answers, wrong_answers 
+        FROM user_scores 
+        ORDER BY correct_answers DESC, wrong_answers ASC 
+        LIMIT 12
+    ''')
+    rows = cur.fetchall()
+
+    if not rows:
+        bot.reply_to(message, 'Nessun dato disponibile.')
+        return
+
+    ranking = "Classifica skill Johnson:\n"
+    ranking += "--------------------------\n"
+    ranking += "Corrette / Sbagliate\n"
+    for username, correct, wrong in rows:
+        username = username or 'Utente sconosciuto'
+        ranking += f"{username}: {correct} / {wrong}\n"
+
+    bot.reply_to(message, ranking)
 
 
 @bot.message_handler(commands=['classifica'])
@@ -68,7 +127,7 @@ def classifica(message):
         bot.reply_to(message, 'Nessun utente trovato.')
         return
     
-    ranking = "Classifica di Johnson:\n"
+    ranking = "Classifica punti Johnson:\n"
     ranking += "--------------------------\n"
     for username, points in rows:
         username = username or 'Utente sconosciuto'
@@ -171,18 +230,19 @@ def quiz(message):
 @bot.message_handler(commands=['ans'])
 def ans(message):
     global answer
+    user_id = message.chat.id
+    username = message.from_user.username or 'Utente'
 
     if answer == '':
         bot.reply_to(message, 'Nessun quiz in corso. Per avviarne uno usa /quiz.')
     else:
         markup = telebot.types.ReplyKeyboardRemove(selective=False)
         if get_text(message.text) == answer:
-            user_id = message.chat.id
-            username = message.from_user.username or 'Utente'
-            update_points(user_id, 1, username)
+            update_points(user_id, 1, username, correct=True)
             bot.reply_to(message, 'Corretto!', reply_markup=markup)
         else:
-            bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '', reply_markup=markup)
+            update_points(user_id, -1, username, wrong=True)
+            bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 1 punto.", reply_markup=markup)
         answer = ''
 
 @bot.message_handler(commands=['testo'])
