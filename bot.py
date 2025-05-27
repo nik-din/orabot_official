@@ -55,7 +55,7 @@ def get_points(user_id):
 
 @bot.message_handler(commands=['punti'])
 def mypoints(message):
-    pts = get_points(message.chat.id)
+    pts = get_points(message.from_user.id)
     bot.reply_to(message, f"Hai {pts} punti di Johnson.")
 
 
@@ -177,7 +177,7 @@ def ans(message):
     else:
         markup = telebot.types.ReplyKeyboardRemove(selective=False)
         if get_text(message.text) == answer:
-            user_id = message.chat.id
+            user_id = message.from_user.id
             username = message.from_user.username or 'Utente'
             update_points(user_id, 1, username)
             bot.reply_to(message, 'Corretto!', reply_markup=markup)
