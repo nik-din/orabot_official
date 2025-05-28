@@ -236,6 +236,7 @@ def ans(message):
     if answer == '':
         bot.reply_to(message, 'Nessun quiz in corso. Per avviarne uno usa /quiz.')
     else:
+        answer = ''
         markup = telebot.types.ReplyKeyboardRemove(selective=False)
         if get_text(message.text) == answer:
             update_points(user_id, 1, username, correct=True)
@@ -243,7 +244,6 @@ def ans(message):
         else:
             update_points(user_id, -1, username, wrong=True)
             bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 1 punto.", reply_markup=markup)
-        answer = ''
 
 @bot.message_handler(commands=['testo'])
 def testo(message):
