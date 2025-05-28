@@ -83,8 +83,8 @@ def get_points(user_id):
     row = cur.fetchone()
     return row[0] if row else 0
 
-@bot.message_handler(commands=['punti'])
-def punti(message):
+@bot.message_handler(commands=['score'])
+def score(message):
     user_id = message.from_user.id
     cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = ?', (user_id,))
     row = cur.fetchone()
@@ -118,8 +118,8 @@ def skill(message):
     bot.reply_to(message, ranking)
 
 
-@bot.message_handler(commands=['classifica'])
-def classifica(message):
+@bot.message_handler(commands=['ranking'])
+def ranking(message):
     cur.execute('SELECT username, points FROM user_scores ORDER BY points DESC LIMIT 12')
     rows = cur.fetchall()
     
