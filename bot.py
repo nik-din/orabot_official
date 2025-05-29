@@ -98,7 +98,7 @@ def skill(message):
         ''')
         rows = cur.fetchall()
 
-        ranking = "Classifica skill Johnson:\n--------------------------\nCorrette / Sbagliate\n"
+        ranking = "Classifica skill Johnson:\nCorrette / Sbagliate\n--------------------------\n"
         for username, correct, wrong in rows:
             ranking += f"{username or 'Utente'}: {correct} / {wrong}\n"
 
@@ -230,13 +230,13 @@ def ans(message):
     else:
         markup = telebot.types.ReplyKeyboardRemove(selective=False)
         if get_text(message.text) == answer:
+            bot.reply_to(message, 'Corretto!' + '.\n' + username + " ha guadagnato 1 punto.", reply_markup=markup)
             answer = ''
             update_points(user_id, 1, username, correct=True)
-            bot.reply_to(message, 'Corretto!', reply_markup=markup)
         else:
+            bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 1 punto.", reply_markup=markup)
             answer = ''
             update_points(user_id, -1, username, wrong=True)
-            bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 1 punto.", reply_markup=markup)
 
 @bot.message_handler(commands=['testo'])
 def testo(message):
