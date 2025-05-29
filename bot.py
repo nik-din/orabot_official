@@ -222,7 +222,7 @@ def quiz(message):
 @bot.message_handler(commands=['ans'])
 def ans(message):
     global answer
-    user_id = message.chat.id
+    user_id = message.from_user.id
     username = message.from_user.username or 'Utente'
 
     if answer == '':
