@@ -26,114 +26,106 @@ pwd = os.environ.get('DB_PASSWORD')
 started = False
 answer = ''
 
-conn = sqlite3.connect('bot_data.db', check_same_thread=False)
-cur = conn.cursor()
-
-cur.execute('''
-CREATE TABLE IF NOT EXISTS user_scores (
-    user_id INTEGER PRIMARY KEY,
-    username TEXT,
-    points INTEGER NOT NULL DEFAULT 0
-)
-''')
-conn.commit()
-
-def table_needs_reset():
-    cur.execute("PRAGMA table_info(user_scores)")
-    columns = [col[1] for col in cur.fetchall()]
-    expected_columns = {'user_id', 'username', 'points', 'correct_answers', 'wrong_answers'}
-    return not expected_columns.issubset(set(columns))
-
-if table_needs_reset():
-    cur.execute("DROP TABLE IF EXISTS user_scores")
-    cur.execute('''
-        CREATE TABLE user_scores (
-            user_id INTEGER PRIMARY KEY,
-            username TEXT,
-            points INTEGER NOT NULL DEFAULT 0,
-            correct_answers INTEGER NOT NULL DEFAULT 0,
-            wrong_answers INTEGER NOT NULL DEFAULT 0
-        )
-    ''')
-    conn.commit()
+def get_pg_cursor():
+    conn = psycopg2.connect(
+        host=os.environ.get('DB_HOST'),
+        database=os.environ.get('DB'),
+        user=os.environ.get('DB_USER'),
+        password=os.environ.get('DB_PASSWORD')
+    )
+    return conn, conn.cursor()
 
 def update_points(user_id, delta, username=None, correct=False, wrong=False):
-    cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = ?', (user_id,))
-    row = cur.fetchone()
-    if row:
-        new_points = max(0, row[0] + delta)
-        correct_count = row[1] + (1 if correct else 0)
-        wrong_count = row[2] + (1 if wrong else 0)
-        cur.execute('''
-            UPDATE user_scores 
-            SET points = ?, username = ?, correct_answers = ?, wrong_answers = ? 
-            WHERE user_id = ?
-        ''', (new_points, username, correct_count, wrong_count, user_id))
-    else:
-        initial_points = max(0, delta)
-        cur.execute('''
-            INSERT INTO user_scores (user_id, username, points, correct_answers, wrong_answers) 
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, username, initial_points, 1 if correct else 0, 1 if wrong else 0))
-    conn.commit()
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = %s', (user_id,))
+        row = cur.fetchone()
+        
+        if row:
+            new_points = max(0, row[0] + delta)
+            correct_count = row[1] + (1 if correct else 0)
+            wrong_count = row[2] + (1 if wrong else 0)
+            cur.execute('''
+                UPDATE user_scores 
+                SET points = %s, username = %s, correct_answers = %s, wrong_answers = %s 
+                WHERE user_id = %s
+            ''', (new_points, username, correct_count, wrong_count, user_id))
+        else:
+            initial_points = max(0, delta)
+            cur.execute('''
+                INSERT INTO user_scores (user_id, username, points, correct_answers, wrong_answers) 
+                VALUES (%s, %s, %s, %s, %s)
+            ''', (user_id, username, initial_points, 1 if correct else 0, 1 if wrong else 0))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def get_points(user_id):
-    cur.execute('SELECT points FROM user_scores WHERE user_id = ?', (user_id,))
-    row = cur.fetchone()
-    return row[0] if row else 0
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute('SELECT points FROM user_scores WHERE user_id = %s', (user_id,))
+        row = cur.fetchone()
+        return row[0] if row else 0
+    finally:
+        conn.close()
 
 @bot.message_handler(commands=['score'])
 def score(message):
-    user_id = message.from_user.id
-    cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = ?', (user_id,))
-    row = cur.fetchone()
-    if row:
-        points, correct, wrong = row
-        bot.reply_to(message, f"Hai {points} punti di Johnson.\nRisposte corrette: {correct}\nRisposte sbagliate: {wrong}")
-    else:
-        bot.reply_to(message, "Non ci sono abbastanza dati su di te.")
+    conn, cur = get_pg_cursor()
+    try:
+        user_id = message.from_user.id
+        cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = %s', (user_id,))
+        row = cur.fetchone()
+        
+        if row:
+            points, correct, wrong = row
+            bot.reply_to(message, f"Hai {points} punti di Johnson.\nRisposte corrette: {correct}\nRisposte sbagliate: {wrong}")
+        else:
+            bot.reply_to(message, "Non ci sono abbastanza dati su di te.")
+    finally:
+        conn.close()
 
 @bot.message_handler(commands=['skill'])
 def skill(message):
-    cur.execute('''
-        SELECT username, correct_answers, wrong_answers 
-        FROM user_scores 
-        ORDER BY correct_answers DESC, wrong_answers ASC 
-        LIMIT 12
-    ''')
-    rows = cur.fetchall()
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute('''
+            SELECT username, correct_answers, wrong_answers 
+            FROM user_scores 
+            ORDER BY correct_answers DESC, wrong_answers ASC 
+            LIMIT 12
+        ''')
+        rows = cur.fetchall()
 
-    if not rows:
-        bot.reply_to(message, 'Nessun dato disponibile.')
-        return
+        ranking = "Classifica skill Johnson:\n--------------------------\nCorrette / Sbagliate\n"
+        for username, correct, wrong in rows:
+            ranking += f"{username or 'Utente'}: {correct} / {wrong}\n"
 
-    ranking = "Classifica skill Johnson:\n"
-    ranking += "--------------------------\n"
-    ranking += "Corrette / Sbagliate\n"
-    for username, correct, wrong in rows:
-        username = username or 'Utente sconosciuto'
-        ranking += f"{username}: {correct} / {wrong}\n"
-
-    bot.reply_to(message, ranking)
+        bot.reply_to(message, ranking if rows else 'Nessun dato disponibile.')
+    finally:
+        conn.close()
 
 
 @bot.message_handler(commands=['ranking'])
 def ranking(message):
-    cur.execute('SELECT username, points FROM user_scores ORDER BY points DESC LIMIT 12')
-    rows = cur.fetchall()
-    
-    if not rows:
-        bot.reply_to(message, 'Nessun utente trovato.')
-        return
-    
-    ranking = "Classifica punti Johnson:\n"
-    ranking += "--------------------------\n"
-    for username, points in rows:
-        username = username or 'Utente sconosciuto'
-        ranking += f"{username}: {points}\n"
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute('''
+            SELECT username, points 
+            FROM user_scores 
+            ORDER BY points DESC 
+            LIMIT 12
+        ''')
+        rows = cur.fetchall()
 
-    bot.reply_to(message, ranking)
+        ranking = "Classifica punti Johnson:\n--------------------------\n"
+        for username, points in rows:
+            ranking += f"{username or 'Utente'}: {points}\n"
+
+        bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
+    finally:
+        conn.close()
 
 @bot.inline_handler(func=lambda query: query.query.startswith('johnson'))
 def query_johnson(inline_query):
@@ -236,12 +228,13 @@ def ans(message):
     if answer == '':
         bot.reply_to(message, 'Nessun quiz in corso. Per avviarne uno usa /quiz.')
     else:
-        answer = ''
         markup = telebot.types.ReplyKeyboardRemove(selective=False)
         if get_text(message.text) == answer:
+            answer = ''
             update_points(user_id, 1, username, correct=True)
             bot.reply_to(message, 'Corretto!', reply_markup=markup)
         else:
+            answer = ''
             update_points(user_id, -1, username, wrong=True)
             bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 1 punto.", reply_markup=markup)
 
