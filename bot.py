@@ -25,6 +25,8 @@ pwd = os.environ.get('DB_PASSWORD')
 
 started = False
 answer = ''
+quiz_id = None
+chat_quiz_id = None
 
 def get_pg_cursor():
     conn = psycopg2.connect(
@@ -47,9 +49,9 @@ def update_points(user_id, delta, username=None, correct=False, wrong=False):
             wrong_count = row[2] + (1 if wrong else 0)
             cur.execute('''
                 UPDATE user_scores 
-                SET points = %s, username = %s, correct_answers = %s, wrong_answers = %s 
+                SET points = %s, correct_answers = %s, wrong_answers = %s 
                 WHERE user_id = %s
-            ''', (new_points, username, correct_count, wrong_count, user_id))
+            ''', (new_points, correct_count, wrong_count, user_id))
         else:
             initial_points = max(0, delta)
             cur.execute('''
@@ -93,7 +95,7 @@ def skill(message):
         cur.execute('''
             SELECT username, correct_answers, wrong_answers 
             FROM user_scores 
-            ORDER BY correct_answers DESC, wrong_answers ASC 
+            ORDER BY (correct_answers::float)/(wrong_answers+1) DESC, correct_answers DESC
             LIMIT 12
         ''')
         rows = cur.fetchall()
@@ -209,26 +211,30 @@ def add_random(message):
 
 @bot.message_handler(commands=['quiz'])
 def quiz(message):
-    global answer
+    global answer, quiz_id, chat_quiz_id
     options = random.sample(johnson_image, 3)
     answer = random.choice(options).replace('_', ' ')
+    if quiz_id is not None and chat_quiz_id is not None:
+        bot.delete_message(chat_quiz_id, quiz_id)
 
     markup = telebot.types.ReplyKeyboardMarkup()
     for item in options:
         markup.row(telebot.types.KeyboardButton('/ans ' + item.replace('_', ' ')))
 
-    bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + answer.capitalize() + '.png', 'Che solido di Johnson è?', reply_to_message_id=message.id, reply_markup=markup)
+    sent_msg = bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + answer.capitalize() + '.png', 'Che solido di Johnson è?', reply_to_message_id=message.id, reply_markup=markup)
+    quiz_id = sent_msg.message_id
+    chat_quiz_id = sent_msg.chat.id
 
 @bot.message_handler(commands=['ans'])
 def ans(message):
-    global answer
+    global answer, quiz_id, chat_quiz_id
     user_id = message.from_user.id
     username = message.from_user.username or 'Utente'
+    markup = telebot.types.ReplyKeyboardRemove(selective=False)
 
     if answer == '':
-        bot.reply_to(message, 'Nessun quiz in corso. Per avviarne uno usa /quiz.')
+        bot.reply_to(message, 'Nessun quiz in corso. Per avviarne uno usa /quiz.', reply_markup=markup)
     else:
-        markup = telebot.types.ReplyKeyboardRemove(selective=False)
         if get_text(message.text) == answer:
             bot.reply_to(message, 'Corretto!' + '.\n' + username + " ha guadagnato 1 punto.", reply_markup=markup)
             answer = ''
@@ -237,6 +243,13 @@ def ans(message):
             bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 1 punto.", reply_markup=markup)
             answer = ''
             update_points(user_id, -1, username, wrong=True)
+        if quiz_id:
+            try:
+                bot.delete_message(message.chat.id, quiz_id)
+            except:
+                pass
+    quiz_id = None
+    
 
 @bot.message_handler(commands=['testo'])
 def testo(message):
