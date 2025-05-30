@@ -143,6 +143,7 @@ def confermo(message):
                 SET points = %s, correct_answers = %s, wrong_answers = %s 
                 WHERE user_id = %s
             ''', (0, 0, 0, user_id))
+            conn.commit()
             bot.reply_to(message, 'Tutte le informazioni che ti riguardano sono state ufficialmente cancellate!\nVedi di non skill issueare questa volta.')
         finally:
             conn.close()
