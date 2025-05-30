@@ -137,6 +137,7 @@ def confermo(message):
     if code in message.text:
         conn, cur = get_pg_cursor()
         user_id = message.from_user.id
+        username = message.from_user.username or 'Utente'
         try:
             cur.execute('''
                 UPDATE user_scores 
@@ -144,7 +145,7 @@ def confermo(message):
                 WHERE user_id = %s
             ''', (0, 0, 0, user_id))
             conn.commit()
-            bot.reply_to(message, 'Tutte le informazioni che ti riguardano sono state ufficialmente cancellate!\nVedi di non skill issueare questa volta.')
+            bot.reply_to(message, f"Tutte le informazioni riguardanti {username} sono state ufficialmente cancellate!\nVedi di non skill issueare questa volta.")
         finally:
             conn.close()
     else:
@@ -250,6 +251,37 @@ def add_random(message):
                     bot.reply_to(message, 'Questa frase è già stata inserita!')
     else:
         bot.reply_to(message, 'Inserire un messaggio.')
+
+@bot.message_handler(commands=['rm_random'])
+def rm_random(message):
+    if not message.reply_to_message:
+        text = get_text(message.text).strip()
+        if text != '':
+            frase_to_remove = text
+        else:
+            bot.reply_to(message, "Inserire una frase da rimuove o ripsondere ad un messaggio che ne contiene una.")
+            return
+        
+    elif message.reply_to_message.text and message.reply_to_message.text.startswith('/add_random'):
+        frase_to_remove = get_text(message.reply_to_message.text)
+    else:
+        frase_to_remove = message.reply_to_message.text
+
+    if not frase_to_remove:
+        bot.reply_to(message, "Inserire una frase da rimuove o ripsondere ad un messaggio che ne contiene una.")
+        return
+
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute('DELETE FROM random WHERE frase = %s', (frase_to_remove,))
+        conn.commit()
+        
+        if cur.rowcount > 0:
+            bot.reply_to(message, f"Frase rimossa:\n{frase_to_remove}")
+        else:
+            bot.reply_to(message, f"Frase non trovata:\n{frase_to_remove}")
+    finally:
+        conn.close()
 
 @bot.message_handler(commands=['quiz'])
 def quiz(message):
