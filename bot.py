@@ -4,7 +4,7 @@ import psycopg2
 import random
 import requests
 import telebot
-import sqlite3
+import string
 from telebot.types import InlineQueryResultArticle, InputTextMessageContent
 
 from johnson import johnson_image
@@ -27,6 +27,8 @@ started = False
 answer = ''
 quiz_id = None
 chat_quiz_id = None
+guessed_by = []
+code = ""
 
 def get_pg_cursor():
     conn = psycopg2.connect(
@@ -72,6 +74,20 @@ def get_points(user_id):
     finally:
         conn.close()
 
+def key():
+    lettere = ''.join(random.choices(string.ascii_uppercase, k=3))
+
+    numeri = ''.join(random.choices(string.digits, k=3))
+    
+    chiave_mista = list(lettere + numeri)
+    random.shuffle(chiave_mista)
+    chiave = '-'.join([
+        ''.join(chiave_mista[:3]),
+        ''.join(chiave_mista[3:])
+    ])[:7]
+
+    return chiave
+
 @bot.message_handler(commands=['score'])
 def score(message):
     conn, cur = get_pg_cursor()
@@ -108,6 +124,31 @@ def skill(message):
     finally:
         conn.close()
 
+@bot.message_handler(commands=['skillissue'])
+def skillissue(message):
+    global code
+    code = key()
+    username = message.from_user.username or 'Utente'
+    bot.reply_to(message, f'{username}!\nAttento! Stai per cancellare tutte le informazioni che ti riguardano!\nSei hai davvero così tanta skill issue rispondi con: "/confermo {code}" a questo messaggio.')
+
+@bot.message_handler(commands=['confermo'])
+def confermo(message):
+    global code
+    if code in message.text:
+        conn, cur = get_pg_cursor()
+        user_id = message.from_user.id
+        try:
+            cur.execute('''
+                UPDATE user_scores 
+                SET points = %s, correct_answers = %s, wrong_answers = %s 
+                WHERE user_id = %s
+            ''', (0, 0, 0, user_id))
+            bot.reply_to(message, 'Tutte le informazioni che ti riguardano sono state ufficialmente cancellate!\nVedi di non skill issueare questa volta.')
+        finally:
+            conn.close()
+    else:
+        bot.reply_to(message, 'Chiave non valida.\nÈ necessario generarne una nuova.')
+    code = ""
 
 @bot.message_handler(commands=['ranking'])
 def ranking(message):
@@ -211,7 +252,7 @@ def add_random(message):
 
 @bot.message_handler(commands=['quiz'])
 def quiz(message):
-    global answer, quiz_id, chat_quiz_id
+    global answer, quiz_id, chat_quiz_id, guessed_by
     options = random.sample(johnson_image, 3)
     answer = random.choice(options).replace('_', ' ')
     if quiz_id is not None and chat_quiz_id is not None:
@@ -224,19 +265,21 @@ def quiz(message):
     sent_msg = bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + answer.capitalize() + '.png', 'Che solido di Johnson è?', reply_to_message_id=message.id, reply_markup=markup)
     quiz_id = sent_msg.message_id
     chat_quiz_id = sent_msg.chat.id
+    guessed_by = []
 
 @bot.message_handler(commands=['ans'])
 def ans(message):
-    global answer, quiz_id, chat_quiz_id
+    global answer, quiz_id, chat_quiz_id, guessed_by
     user_id = message.from_user.id
     username = message.from_user.username or 'Utente'
     markup = telebot.types.ReplyKeyboardRemove(selective=False)
 
     if answer == '':
         bot.reply_to(message, 'Nessun quiz in corso. Per avviarne uno usa /quiz.', reply_markup=markup)
-    else:
+    elif user_id not in guessed_by:
+        guessed_by.append(user_id)
         if get_text(message.text) == answer:
-            bot.reply_to(message, 'Corretto!' + '.\n' + username + " ha guadagnato 1 punto.", reply_markup=markup)
+            bot.reply_to(message, 'Corretto!' + '\n' + username + " ha guadagnato 1 punto.", reply_markup=markup)
             answer = ''
             update_points(user_id, 1, username, correct=True)
         else:
@@ -248,7 +291,10 @@ def ans(message):
                 bot.delete_message(message.chat.id, quiz_id)
             except:
                 pass
+    else:
+        bot.reply_to(message, 'Hai già risposto a questo quiz!\nSmettila di provare a imbrogliare!!')
     quiz_id = None
+    chat_quiz_id = None
     
 
 @bot.message_handler(commands=['testo'])
