@@ -134,7 +134,10 @@ def skillissue(message):
 @bot.message_handler(commands=['confermo'])
 def confermo(message):
     global code
-    if code in message.text:
+    if code == "":
+        bot.reply_to(message, "Non hai generato ancora nessun codice.\nUsa /skillissue per saperne di più.")
+        return
+    if code == get_text(message.text).strip():
         conn, cur = get_pg_cursor()
         user_id = message.from_user.id
         username = message.from_user.username or 'Utente'
