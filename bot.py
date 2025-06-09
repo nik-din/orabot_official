@@ -476,13 +476,13 @@ def place_bet(message):
     
     # Formato: /scommetti <poll_id> <option_num> <amount>
     parts = get_text(message.text).split()
-    if len(parts) < 4:
-        bot.reply_to(message, "Inserire la propria scomessa nel seguente formato: /scommetti <poll_id> <option_num> <amount>")
+    if len(parts) < 3:
+        bot.reply_to(message, "Inserire la propria scomessa nel seguente formato: /bet <poll_id> <option_num> <amount>")
         return
         
-    poll_id = parts[1]
-    option_id = int(parts[2])
-    amount = int(parts[3])
+    poll_id = parts[0]
+    option_id = int(parts[1])
+    amount = int(parts[2])
     
     current_points = get_orascore(user_id)
     if amount <= 0:
