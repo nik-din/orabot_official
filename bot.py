@@ -597,12 +597,12 @@ def resolve_poll(message):
         
         cur.execute(
             "DELETE FROM bets WHERE poll_id = %s",
-            (bets[2],)
+            (poll_id,)
         )
 
         cur.execute(
             "DELETE FROM polls WHERE poll_id = %s",
-            (bets[2],)
+            (poll_id,)
         )
 
         
