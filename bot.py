@@ -13,7 +13,11 @@ from keep_alive_ping import create_service
 
 service = create_service(ping_interval=600)
 
-
+#CREATE TABLE user_orascore (
+#    user_id BIGINT PRIMARY KEY,
+#    username TEXT,
+#    orascore INTEGER NOT NULL DEFAULT 0
+#);
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -38,6 +42,70 @@ def get_pg_cursor():
         password=os.environ.get('DB_PASSWORD')
     )
     return conn, conn.cursor()
+
+
+def get_text(message):
+    words = message.replace('\n', ' \n').split()
+    return ' '.join(words[1:])
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.reply_to(message, '...')
+
+@bot.message_handler(commands=['ciao'])
+def ciao(message):
+    print(message.chat.id)
+    print(message.id)
+    bot.reply_to(message, 'Buondì!')
+
+@bot.message_handler(commands=['ora'])
+def ora(message):
+    bot.reply_to(message, 'A che ora è mate?')
+
+@bot.message_handler(commands=['testo'])
+def testo(message):
+    name = get_text(message.text)
+    url = 'https://training.olinfo.it/api/task'
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    data = {
+        'action': 'get',
+        'name': ''
+    }
+    statement = {}
+
+    prefix = ['', 'oii_', 'ois_', 'abc_', 'gator_', 'luiss_', 'mat_', 'preoii_', 'pre_boi_', 'pre-egoi-', 'roiti_', 'unimi_', 'weoi_']
+    for i in prefix:
+        data['name'] = i + name
+        r = requests.post(url, headers=headers, data=json.dumps(data))
+        statement = json.loads(r.text)
+        print(data['name'])
+        if statement['success'] == 1:
+            name = data['name']
+            break
+
+    if statement['success'] == 1:
+        ids = statement['statements']
+        link = 'https://training.olinfo.it/api/files/' + (ids['it'] if 'it' in ids.keys() else ids['en']) + '/testo.pdf'
+        tl = str(statement['time_limit']) + ' sec'
+        ml = str(statement['memory_limit']/1048576) + ' MiB'
+        pt = '<span class="tg-spoiler">' + str(round(statement['score_multiplier']*100)) + ' punti</span>'
+        tg = ''
+        for tag in statement['tags']:
+            tg += '<span class="tg-spoiler">' + tag['name'] + '</span> '
+        bot.send_document(message.chat.id, link, message.id, name + '\n' + pt + '\n' + tl + '\n' + ml + '\n' + tg, parse_mode='HTML')
+        # bot.send_document(message.chat.id, link, message.id, name + '\n' + tl + '\n' + ml)
+    else:
+        bot.reply_to(message, 'Nome del problema sbagliato. Riprovare.')
+
+#-------------------------------------------------------------------------------------------------
+#       _    ___    _   _   _   _   ____     ___    _   _     ____     ___    ___   _   _   _____ 
+#      | |  / _ \  | | | | | \ | | / ___|   / _ \  | \ | |   |  _ \   / _ \  |_ _| | \ | | |_   _|
+#   _  | | | | | | | |_| | |  \| | \___ \  | | | | |  \| |   | |_) | | | | |  | |  |  \| |   | |  
+#  | |_| | | |_| | |  _  | | |\  |  ___) | | |_| | | |\  |   |  __/  | |_| |  | |  | |\  |   | |  
+#   \___/   \___/  |_| |_| |_| \_| |____/   \___/  |_| \_|   |_|      \___/  |___| |_| \_|   |_|  
+#--------------------------------------------------------------------------------------------------
 
 def update_points(user_id, delta, username=None, correct=False, wrong=False):
     conn, cur = get_pg_cursor()
@@ -192,25 +260,6 @@ def query_johnson(inline_query):
     results = results[:20]
     bot.answer_inline_query(inline_query.id, results)
 
-
-def get_text(message):
-    words = message.replace('\n', ' \n').split()
-    return ' '.join(words[1:])
-
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.reply_to(message, '...')
-
-@bot.message_handler(commands=['ciao'])
-def ciao(message):
-    print(message.chat.id)
-    print(message.id)
-    bot.reply_to(message, 'Buondì!')
-
-@bot.message_handler(commands=['ora'])
-def ora(message):
-    bot.reply_to(message, 'A che ora è mate?')
-
 @bot.message_handler(commands=['johnson'])
 def johnson(message):
     global length
@@ -231,6 +280,61 @@ def johnson(message):
         bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + solid + '.png', solid.replace('_', ' '), reply_to_message_id=message.id)
     else:
         bot.reply_to(message, 'Solido non valido.')
+
+
+@bot.message_handler(commands=['quiz'])
+def quiz(message):
+    global answer, quiz_id, chat_quiz_id, guessed_by
+    options = random.sample(johnson_image, 3)
+    answer = random.choice(options).replace('_', ' ')
+    if quiz_id is not None and chat_quiz_id is not None:
+        bot.delete_message(chat_quiz_id, quiz_id)
+
+    markup = telebot.types.ReplyKeyboardMarkup()
+    for item in options:
+        markup.row(telebot.types.KeyboardButton('/ans ' + item.replace('_', ' ')))
+
+    sent_msg = bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + answer.capitalize() + '.png', 'Che solido di Johnson è?', reply_to_message_id=message.id, reply_markup=markup)
+    quiz_id = sent_msg.message_id
+    chat_quiz_id = sent_msg.chat.id
+    guessed_by = []
+
+@bot.message_handler(commands=['ans'])
+def ans(message):
+    global answer, quiz_id, chat_quiz_id, guessed_by
+    user_id = message.from_user.id
+    username = message.from_user.username or 'Utente'
+    markup = telebot.types.ReplyKeyboardRemove(selective=False)
+
+    if answer == '':
+        bot.reply_to(message, 'Nessun quiz in corso. Per avviarne uno usa /quiz.', reply_markup=markup)
+    elif user_id not in guessed_by:
+        guessed_by.append(user_id)
+        if get_text(message.text) == answer:
+            bot.reply_to(message, 'Corretto!' + '\n' + username + " ha guadagnato 1 punto.", reply_markup=markup)
+            answer = ''
+            update_points(user_id, 1, username, correct=True)
+        else:
+            bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 1 punto.", reply_markup=markup)
+            answer = ''
+            update_points(user_id, -1, username, wrong=True)
+        if quiz_id:
+            try:
+                bot.delete_message(message.chat.id, quiz_id)
+            except:
+                pass
+    else:
+        bot.reply_to(message, 'Hai già risposto a questo quiz!\nSmettila di provare a imbrogliare!!')
+    quiz_id = None
+    chat_quiz_id = None
+    
+#-----------------------------------------------------------------------------------------
+#   ____       _      _   _   ____     ___    __  __ 
+#  |  _ \     / \    | \ | | |  _ \   / _ \  |  \/  |
+#  | |_) |   / _ \   |  \| | | | | | | | | | | |\/| |
+#  |  _ <   / ___ \  | |\  | | |_| | | |_| | | |  | |
+#  |_| \_\ /_/   \_\ |_| \_| |____/   \___/  |_|  |_|
+#-----------------------------------------------------------------------------------------
 
 @bot.message_handler(commands=['random'])
 def random_(message):
@@ -286,88 +390,241 @@ def rm_random(message):
     finally:
         conn.close()
 
-@bot.message_handler(commands=['quiz'])
-def quiz(message):
-    global answer, quiz_id, chat_quiz_id, guessed_by
-    options = random.sample(johnson_image, 3)
-    answer = random.choice(options).replace('_', ' ')
-    if quiz_id is not None and chat_quiz_id is not None:
-        bot.delete_message(chat_quiz_id, quiz_id)
 
-    markup = telebot.types.ReplyKeyboardMarkup()
-    for item in options:
-        markup.row(telebot.types.KeyboardButton('/ans ' + item.replace('_', ' ')))
+#-----------------------------------------------------------------------------------------
+#    ___    ____       _      ____     ____    ___    ____    _____ 
+#   / _ \  |  _ \     / \    / ___|   / ___|  / _ \  |  _ \  | ____|
+#  | | | | | |_) |   / _ \   \___ \  | |     | | | | | |_) | |  _|  
+#  | |_| | |  _ <   / ___ \   ___) | | |___  | |_| | |  _ <  | |___ 
+#   \___/  |_| \_\ /_/   \_\ |____/   \____|  \___/  |_| \_\ |_____|
+#-----------------------------------------------------------------------------------------
 
-    sent_msg = bot.send_photo(message.chat.id, 'https://it.wikipedia.org/wiki/File:' + answer.capitalize() + '.png', 'Che solido di Johnson è?', reply_to_message_id=message.id, reply_markup=markup)
-    quiz_id = sent_msg.message_id
-    chat_quiz_id = sent_msg.chat.id
-    guessed_by = []
 
-@bot.message_handler(commands=['ans'])
-def ans(message):
-    global answer, quiz_id, chat_quiz_id, guessed_by
+# """
+# CREATE TABLE polls (
+#     poll_id TEXT PRIMARY KEY,
+#     chat_id BIGINT NOT NULL,
+#     message_id INTEGER NOT NULL,
+#     question TEXT NOT NULL,
+#     options TEXT[] NOT NULL,  -- Array di stringhe con le opzioni
+#     resolved BOOLEAN DEFAULT FALSE,
+#     winning_option INTEGER,  -- Opzione vincente (NULL finché non risolto)
+#     creator_id BIGINT NOT NULL,
+#     creator_username TEXT
+# );
+# CREATE TABLE user_orascore (
+#     user_id BIGINT PRIMARY KEY,
+#     userame TEXT,
+#     orascore INTEGER NOT NULL DEFAULT 0,
+#     locked_points INTEGER DEFAULT 0
+# );
+# CREATE TABLE bets (
+#     bet_id SERIAL PRIMARY KEY,
+#     user_id BIGINT NOT NULL,
+#     poll_id TEXT NOT NULL,
+#     option_id INTEGER NOT NULL,
+#     amount INTEGER NOT NULL,
+#     resolved BOOLEAN DEFAULT FALSE,
+# );
+# """
+def get_orascore(user_id):
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute('SELECT orascore FROM user_orascore WHERE user_id = %s', (user_id,))
+        row = cur.fetchone()
+        return row[0] if row else 0
+    finally:
+        conn.close()
+
+
+@bot.message_handler(commands=['poll'])
+def poll(message):
     user_id = message.from_user.id
     username = message.from_user.username or 'Utente'
-    markup = telebot.types.ReplyKeyboardRemove(selective=False)
+    chat_id = message.chat.id
 
-    if answer == '':
-        bot.reply_to(message, 'Nessun quiz in corso. Per avviarne uno usa /quiz.', reply_markup=markup)
-    elif user_id not in guessed_by:
-        guessed_by.append(user_id)
-        if get_text(message.text) == answer:
-            bot.reply_to(message, 'Corretto!' + '\n' + username + " ha guadagnato 1 punto.", reply_markup=markup)
-            answer = ''
-            update_points(user_id, 1, username, correct=True)
-        else:
-            bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 1 punto.", reply_markup=markup)
-            answer = ''
-            update_points(user_id, -1, username, wrong=True)
-        if quiz_id:
-            try:
-                bot.delete_message(message.chat.id, quiz_id)
-            except:
-                pass
-    else:
-        bot.reply_to(message, 'Hai già risposto a questo quiz!\nSmettila di provare a imbrogliare!!')
-    quiz_id = None
-    chat_quiz_id = None
+    # Formato: /creasondaggio "Domanda?" "Opzione 1" "Opzione 2" ...
+    if get_text(message).strip() == "":
+        bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/\"domanda\" \"opzione 1\" \"opzione 2\" ...")
+        return
+    parts = message.text.split('"')[1::2]
+    question = parts[0]
+    options = parts[1:]
     
+    if len(options) < 2:
+        bot.reply_to(message, "Devi fornire almeno 2 opzioni.")
+        return
+        
+    poll = bot.send_poll(
+        chat_id=message.chat.id,
+        question=question,
+        options=options,
+        is_anonymous=False,
+        allows_multiple_answers=False
+    )
+    
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute(
+            "INSERT INTO polls (poll_id, chat_id, message_id, question, options, creator_id, creator_username) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (poll.id, chat_id, poll.message_id, question, options, user_id, username)
+        )
+        conn.commit()
+        bot.send_message(message.chat.id, f"Pool_id: {poll.id}")
+    finally:
+        conn.close()
+            
 
-@bot.message_handler(commands=['testo'])
-def testo(message):
-    name = get_text(message.text)
-    url = 'https://training.olinfo.it/api/task'
-    headers = {
-        'Content-Type': 'application/json'
-    }
-    data = {
-        'action': 'get',
-        'name': ''
-    }
-    statement = {}
+@bot.message_handler(commands=['bet'])
+def place_bet(message):
+    user_id = message.from_user.id
+    username = message.from_user.username or 'Utente'
+    
+    # Formato: /scommetti <poll_id> <option_num> <amount>
+    parts = get_text(message.text).split()
+    if len(parts) < 4:
+        bot.reply_to(message, "Inserire la propria scomessa nel seguente formato: /scommetti <poll_id> <option_num> <amount>")
+        return
+        
+    poll_id = parts[1]
+    option_id = int(parts[2])
+    amount = int(parts[3])
+    
+    current_points = get_orascore(user_id)
+    if amount <= 0:
+        bot.reply_to(message, "Ci hai provato! L'importo deve essere positivo.")
+        return
+    if current_points < amount:
+        bot.reply_to(message, f"Non hai abbastanza OraScore, povero! Hai solo {current_points} di OraScore.")
+        return
+        
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute("SELECT * FROM polls WHERE poll_id = %s", (poll_id,))
+        poll = cur.fetchone()
+        if not poll:
+            bot.reply_to(message, "Sondaggio non trovato.")
+            return
+            
+        if option_id < 0 or option_id >= len(poll[4]):
+            bot.reply_to(message, "Opzione non valida.")
+            return
+            
+        cur.execute(
+            "UPDATE user_orascore SET orascore = orascore - %s, locked_points = locked_points + %s WHERE user_id = %s",
+            (amount, amount, user_id)
+        )
+        
+        cur.execute(
+            "INSERT INTO bets (user_id, poll_id, option_id, amount) VALUES (%s, %s, %s, %s)",
+            (user_id, poll_id, option_id, amount)
+        )
+        
+        conn.commit()
+        bot.reply_to(message, f"{username} ha scommesso {amount} di OraScore sull'opzione {option_id + 1} del sondaggio con id: {poll_id}!")
+    finally:
+        conn.close()
+        
 
-    prefix = ['', 'oii_', 'ois_', 'abc_', 'gator_', 'luiss_', 'mat_', 'preoii_', 'pre_boi_', 'pre-egoi-', 'roiti_', 'unimi_', 'weoi_']
-    for i in prefix:
-        data['name'] = i + name
-        r = requests.post(url, headers=headers, data=json.dumps(data))
-        statement = json.loads(r.text)
-        print(data['name'])
-        if statement['success'] == 1:
-            name = data['name']
-            break
+@bot.message_handler(commands=['solve'])
+def resolve_poll(message):
+    # FORMATO: /risultato <poll_id> <winning_option_num>
+    poll_id = get_text(message.text).split()[0]
+    winning_option = int(get_text(message.text).split()[1])
+    user_id = message.from_user.id
+    
+    conn, cur = get_pg_cursor()
 
-    if statement['success'] == 1:
-        ids = statement['statements']
-        link = 'https://training.olinfo.it/api/files/' + (ids['it'] if 'it' in ids.keys() else ids['en']) + '/testo.pdf'
-        tl = str(statement['time_limit']) + ' sec'
-        ml = str(statement['memory_limit']/1048576) + ' MiB'
-        pt = '<span class="tg-spoiler">' + str(round(statement['score_multiplier']*100)) + ' punti</span>'
-        tg = ''
-        for tag in statement['tags']:
-            tg += '<span class="tg-spoiler">' + tag['name'] + '</span> '
-        bot.send_document(message.chat.id, link, message.id, name + '\n' + pt + '\n' + tl + '\n' + ml + '\n' + tg, parse_mode='HTML')
-        # bot.send_document(message.chat.id, link, message.id, name + '\n' + tl + '\n' + ml)
-    else:
-        bot.reply_to(message, 'Nome del problema sbagliato. Riprovare.')
+    try:
+        parts = get_text(message.text).split()
+        if len(parts) != 2:
+            bot.reply_to(message, "Inserire la solve del sondaggio nel seguente formato: /solve <poll_id> <winning_option_num>")
+            return
+
+        poll_id = parts[0]
+
+        conn, cur = get_pg_cursor()
+        
+        cur.execute("SELECT * FROM polls WHERE poll_id = %s", (poll_id,))
+        poll = cur.fetchone()
+
+        
+        if not poll:
+            bot.reply_to(message, "Sondaggio non trovato o già risolto!")
+            return
+        winning_text = poll[4][winning_option]
+        if user_id != poll[7]:
+            bot.reply_to(message, f"Non sei tu il creatore di questo sondaggio!\nIl creatore è {poll[8]}")
+            return
+            
+        if winning_option < 0 or winning_option >= len(poll[4]):
+            bot.reply_to(message, "Opzione non valida!")
+            return
+        
+        
+    finally:
+        conn.close()
+    
+    conn, cur = get_pg_cursor()
+
+    try:
+        cur.execute("SELECT * FROM bets WHERE poll_id = %s AND resolved = FALSE", (poll_id,))
+        bets = cur.fetchall()
+        
+        winning_bets = 0
+        losing_bets = 0
+        
+        for bet in bets:
+            if bet[3] == winning_option:
+                winning_bets += 1
+            else:
+                losing_bets += 1
+        
+        if winning_bets > 0:
+            multiplier = 1 + (losing_bets / winning_bets)
+        else:
+            multiplier = 1
+            
+        for bet in bets:
+            if bet[3] == winning_option:
+                win_amount = int(bet[4] * multiplier)
+                cur.execute(
+                    "UPDATE user_orascore SET locked_points = locked_points - %s, orascore = orascore + %s WHERE user_id = %s",
+                    (bet[4], win_amount, bet[1]))
+            else:
+                cur.execute(
+                    "UPDATE user_orascore SET locked_points = locked_points - %s WHERE user_id = %s",
+                    (bet[4], bet[1]))
+            
+            cur.execute(
+                "UPDATE bets SET resolved = TRUE WHERE bet_id = %s",
+                (bet[0],)
+            )
+        
+        cur.execute(
+            "DELETE FROM bets WHERE poll_id = %s",
+            (bets[2],)
+        )
+
+        cur.execute(
+            "DELETE FROM polls WHERE poll_id = %s",
+            (bets[2],)
+        )
+
+        
+        conn.commit()
+        
+        result_text = (
+            f"Sondaggio chiuso!\n"
+            f"Opzione vincente: {winning_option}: {winning_text}\n"
+            f"Moltiplicatore: x{multiplier}\n"
+        )
+        bot.reply_to(message, result_text) 
+
+    except ValueError:
+        bot.reply_to(message, "L'opzione vincente deve essere un numero!")
+    finally:
+        conn.close()
+
 
 bot.infinity_polling()
