@@ -13,12 +13,6 @@ from keep_alive_ping import create_service
 
 service = create_service(ping_interval=600)
 
-#CREATE TABLE user_orascore (
-#    user_id BIGINT PRIMARY KEY,
-#    username TEXT,
-#    orascore INTEGER NOT NULL DEFAULT 0
-#);
-
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -444,7 +438,7 @@ def poll(message):
     chat_id = message.chat.id
 
     # Formato: /creasondaggio "Domanda?" "Opzione 1" "Opzione 2" ...
-    if get_text(message).strip() == "":
+    if message.text == "":
         bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/\"domanda\" \"opzione 1\" \"opzione 2\" ...")
         return
     parts = message.text.split('"')[1::2]
