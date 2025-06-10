@@ -717,6 +717,10 @@ def active_polls(message):
         cur.execute('''SELECT * FROM polls''')
         polls = cur.fetchall()
 
+        if not polls:
+            bot.reply_to(message, "Nessun sondaggio attivo al momento.")
+            return
+            
         for poll in polls:
             actives += f"Sondaggio: {poll[0]}\nCreato da: {poll[8]}\nDomanda: {poll[3]}\n"
             table = []
