@@ -30,10 +30,10 @@ code = ""
 
 def get_pg_cursor():
     conn = psycopg2.connect(
-        host=os.environ.get('DB_HOST'),
-        database=os.environ.get('DB'),
-        user=os.environ.get('DB_USER'),
-        password=os.environ.get('DB_PASSWORD')
+        host=host,
+        database=db,
+        user=user,
+        password=pwd
     )
     return conn, conn.cursor()
 
@@ -190,7 +190,7 @@ def skill(message):
 def skillissue(message):
     global code
     code = key()
-    username = message.from_user.username or 'Utente'
+    username = message.from_user.username or message.from_user.first_name or 'Utente'
     bot.reply_to(message, f'{username}!\nAttento! Stai per cancellare tutte le informazioni che ti riguardano!\nSei hai davvero così tanta skill issue rispondi con: "/confermo {code}" a questo messaggio.')
 
 @bot.message_handler(commands=['confermo'])
@@ -202,7 +202,7 @@ def confermo(message):
     if code == get_text(message.text).strip():
         conn, cur = get_pg_cursor()
         user_id = message.from_user.id
-        username = message.from_user.username or 'Utente'
+        username = message.from_user.username or message.from_user.first_name or 'Utente'
         try:
             cur.execute('''
                 UPDATE user_scores 
@@ -297,7 +297,7 @@ def quiz(message):
 def ans(message):
     global answer, quiz_id, chat_quiz_id, guessed_by
     user_id = message.from_user.id
-    username = message.from_user.username or 'Utente'
+    username = message.from_user.username or message.from_user.first_name or 'Utente'
     markup = telebot.types.ReplyKeyboardRemove(selective=False)
 
     if answer == '':
@@ -434,7 +434,7 @@ def get_orascore(user_id):
 @bot.message_handler(commands=['poll'])
 def poll(message):
     user_id = message.from_user.id
-    username = message.from_user.username or 'Utente'
+    username = message.from_user.username or message.from_user.first_name or 'Utente'
     chat_id = message.chat.id
 
     # Formato: /creasondaggio "Domanda?" "Opzione 1" "Opzione 2" ...
@@ -442,6 +442,9 @@ def poll(message):
         bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/\"domanda\" \"opzione 1\" \"opzione 2\" ...")
         return
     parts = message.text.split('"')[1::2]
+    if len(parts) < 3:
+        bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/\"domanda\" \"opzione 1\" \"opzione 2\" ...")
+        return
     question = parts[0]
     options = parts[1:]
     
@@ -450,11 +453,12 @@ def poll(message):
         return
         
     poll = bot.send_poll(
-        chat_id=message.chat.id,
+        chat_id=chat_id,
         question=question,
         options=options,
         is_anonymous=False,
-        allows_multiple_answers=False
+        allows_multiple_answers=False,
+        reply_to_message_id=message.id
     )
     
     conn, cur = get_pg_cursor()
@@ -464,7 +468,7 @@ def poll(message):
             (poll.id, chat_id, poll.message_id, question, options, user_id, username)
         )
         conn.commit()
-        bot.send_message(message.chat.id, f"Pool_id: {poll.id}")
+        bot.reply_to(poll, f"Pool_id: {poll.id}")
     finally:
         conn.close()
             
@@ -472,18 +476,18 @@ def poll(message):
 @bot.message_handler(commands=['bet'])
 def place_bet(message):
     user_id = message.from_user.id
-    username = message.from_user.username or 'Utente'
+    username = message.from_user.username or message.from_user.first_name or 'Utente'
     
     # Formato: /scommetti <poll_id> <option_num> <amount>
-    parts = get_text(message.text).split()
-    if len(parts) < 3:
+    parts = message.text.split()
+    if len(parts) < 4:
         bot.reply_to(message, "Inserire la propria scomessa nel seguente formato: /bet <poll_id> <option_num> <amount>")
         return
         
-    poll_id = parts[0]
-    option_id = int(parts[1])
-    amount = int(parts[2])
-    
+    poll_id = parts[1]
+    option_id = int(parts[2])
+    amount = int(parts[3])
+    print(amount)
     current_points = get_orascore(user_id)
     if amount <= 0:
         bot.reply_to(message, "Ci hai provato! L'importo deve essere positivo.")
@@ -500,6 +504,10 @@ def place_bet(message):
             bot.reply_to(message, "Sondaggio non trovato.")
             return
             
+        if user_id == poll[7]:
+            bot.reply_to(message, "Sei tu il creatore di questo sondaggio!")
+            return
+        
         if option_id < 0 or option_id >= len(poll[4]):
             bot.reply_to(message, "Opzione non valida.")
             return
@@ -513,16 +521,24 @@ def place_bet(message):
             "INSERT INTO bets (user_id, poll_id, option_id, amount) VALUES (%s, %s, %s, %s)",
             (user_id, poll_id, option_id, amount)
         )
-        
+        option_text = poll[4][option_id]
         conn.commit()
-        bot.reply_to(message, f"{username} ha scommesso {amount} di OraScore sull'opzione {option_id + 1} del sondaggio con id: {poll_id}!")
+        bot.reply_to(message, f"{username} ha scommesso {amount} di OraScore sull'opzione {option_id}: {option_text} del sondaggio con id: {poll_id}!")
     finally:
         conn.close()
         
 
-@bot.message_handler(commands=['solve'])
+@bot.message_handler(commands=['solve_poll'])
 def resolve_poll(message):
     # FORMATO: /risultato <poll_id> <winning_option_num>
+    if get_text(message.text).strip() == "":
+        bot.reply_to(message, "Inserire la solve del sondaggio nel seguente formato: /solve <poll_id> <winning_option_num>")
+        return
+    
+    parts = get_text(message.text).split()
+    if len(parts) != 2:
+        bot.reply_to(message, "Inserire la solve del sondaggio nel seguente formato: /solve <poll_id> <winning_option_num>")
+        return
     poll_id = get_text(message.text).split()[0]
     winning_option = int(get_text(message.text).split()[1])
     user_id = message.from_user.id
@@ -530,10 +546,6 @@ def resolve_poll(message):
     conn, cur = get_pg_cursor()
 
     try:
-        parts = get_text(message.text).split()
-        if len(parts) != 2:
-            bot.reply_to(message, "Inserire la solve del sondaggio nel seguente formato: /solve <poll_id> <winning_option_num>")
-            return
 
         poll_id = parts[0]
 
@@ -565,23 +577,23 @@ def resolve_poll(message):
         cur.execute("SELECT * FROM bets WHERE poll_id = %s AND resolved = FALSE", (poll_id,))
         bets = cur.fetchall()
         
-        winning_bets = 0
-        losing_bets = 0
+        winning_points = 0
+        losing_points = 0
         
         for bet in bets:
             if bet[3] == winning_option:
-                winning_bets += 1
+                winning_points += bet[4]
             else:
-                losing_bets += 1
+                losing_points += bet[4]
         
-        if winning_bets > 0:
-            multiplier = 1 + (losing_bets / winning_bets)
+        if winning_points > 0:
+            multiplier = 1 + (losing_points / winning_points)
         else:
             multiplier = 1
             
         for bet in bets:
             if bet[3] == winning_option:
-                win_amount = int(bet[4] * multiplier)
+                win_amount = round(bet[4] * multiplier)
                 cur.execute(
                     "UPDATE user_orascore SET locked_points = locked_points - %s, orascore = orascore + %s WHERE user_id = %s",
                     (bet[4], win_amount, bet[1]))
@@ -611,7 +623,9 @@ def resolve_poll(message):
         result_text = (
             f"Sondaggio chiuso!\n"
             f"Opzione vincente: {winning_option}: {winning_text}\n"
-            f"Moltiplicatore: x{multiplier}\n"
+            f"Totale punti vincenti: {winning_points}\n"
+            f"Totale punti perdenti: {losing_points}\n"
+            f"Moltiplicatore: x{multiplier:.2f}\n"
         )
         bot.reply_to(message, result_text) 
 
@@ -620,5 +634,23 @@ def resolve_poll(message):
     finally:
         conn.close()
 
+@bot.message_handler(commands=['orascore'])
+def orascore(message):
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute('''
+            SELECT username, orascore 
+            FROM user_orascore 
+            ORDER BY orascore DESC 
+            LIMIT 12
+        ''')
+        rows = cur.fetchall()
 
+        ranking = "Classifica Orascore:\n--------------------------\n"
+        for username, points in rows:
+            ranking += f"{username or 'Utente'}: {points}\n"
+
+        bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
+    finally:
+        conn.close()
 bot.infinity_polling()
