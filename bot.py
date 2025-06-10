@@ -410,7 +410,8 @@ def rm_random(message):
 #     user_id BIGINT PRIMARY KEY,
 #     userame TEXT,
 #     orascore INTEGER NOT NULL DEFAULT 0,
-#     locked_points INTEGER DEFAULT 0
+#     locked_points INTEGER DEFAULT 0,
+#     last_daily_claim TIMESTAMP
 # );
 # CREATE TABLE bets (
 #     bet_id SERIAL PRIMARY KEY,
@@ -653,4 +654,99 @@ def orascore(message):
         bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
     finally:
         conn.close()
+
+@bot.message_handler(commands=['daily'])
+def daily(message):
+    user_id = message.from_user.id
+    username = message.from_user.username or message.from_user.first_name or 'Utente'
+    
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute('''
+            SELECT orascore, last_daily_claim FROM user_orascore
+            WHERE user_id = %s
+        ''', (user_id,))
+        row = cur.fetchone()
+        
+        now = datetime.now()
+        can_claim = True
+        
+        if row and row[1]:
+            last_claim = row[1]
+            if now - last_claim < timedelta(hours=24):
+                can_claim = False
+                next_claim = last_claim + timedelta(hours=24)
+                remaining = next_claim - now
+                hours = remaining.seconds // 3600
+                minutes = (remaining.seconds % 3600) // 60
+                bot.reply_to(message, 
+                    f"Hai già riscosso la ricompensa giornaliera oggi!\n"
+                    f"Potrai riscuoterla di nuovo tra {hours} ore e {minutes} minuti.")
+        
+        if can_claim:
+            if row:
+                new_points = row[0] + 15
+                cur.execute('''
+                    UPDATE user_orascore
+                    SET orascore = %s, 
+                        last_daily_claim = %s 
+                    WHERE user_id = %s
+                ''', (new_points, now, user_id))
+            else:
+                cur.execute('''
+                    INSERT INTO user_orascore 
+                    (user_id, username, orascore, last_daily_claim) 
+                    VALUES (%s, %s, 15, %s)
+                ''', (user_id, username, now))
+            
+            conn.commit()
+            bot.reply_to(message, f"Ricompensa giornaliera di 15 di OraScore riscossa!\nOra {username} ha {get_orascore(user_id)} punti.")
+            
+    finally:
+        conn.close()
+
+@bot.message_handler(commands=['active_polls'])
+def active_polls(message):
+    chat_id = message.chat.id
+    conn, cur = get_pg_cursor()
+
+    actives = "Sondaggi ancora aperti:\n------------------------------------\n"
+    try:
+        cur.execute('''SELECT * FROM polls''')
+        polls = cur.fetchall()
+
+        for poll in polls:
+            actives += f"Sondaggio: {poll[0]}\nCreato da: {poll[8]}\nDomanda: {poll[3]}\n"
+            table = []
+            headers = ["Opz", "OS", "%", "x"]
+
+            total = 0 #sumop*100 / total
+            cur.execute('''SELECT amount FROM bets WHERE poll_id = %s''', (poll[0],))
+            amountst = cur.fetchall()
+            for amount in amountst:
+                    total += amount[0]
+            for i in range(len(poll[4])):
+                option = []
+                cur.execute('''SELECT amount FROM bets WHERE poll_id = %s AND option_id = %s''', (poll[0], i))
+                amounts = cur.fetchall()
+                sumop = 0
+                for amount in amounts:
+                    sumop += amount[0]
+                perc = 0
+                if total != 0:
+                    perc = int((sumop*100)/total)
+                multiplier = ""
+                if sumop != 0:
+                    multiplier = f"{1 + ((total-sumop)/sumop):.2f}"
+                option.append(poll[4][i][:6])
+                option.append(sumop)
+                option.append(f"{perc}%")
+                option.append(multiplier)
+                table.append(option)
+            actives += f"`{tabulate.tabulate(table, headers, tablefmt="simple")}`\n------------------------------------\n"
+
+        bot.reply_to(message, actives.replace('-', '\\-'), parse_mode='MarkdownV2')
+    finally:
+        conn.close()
+
 bot.infinity_polling()
