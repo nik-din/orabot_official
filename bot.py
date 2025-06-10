@@ -5,6 +5,8 @@ import random
 import requests
 import telebot
 import string
+import tabulate
+from datetime import datetime, timedelta
 from telebot.types import InlineQueryResultArticle, InputTextMessageContent
 
 from johnson import johnson_image
