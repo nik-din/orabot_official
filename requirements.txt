@@ -4,3 +4,4 @@ pyTelegramBotAPI
 requests
 uvicorn
 keep-alive-ping
+tabulate
