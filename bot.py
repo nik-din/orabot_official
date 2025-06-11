@@ -406,7 +406,8 @@ def rm_random(message):
 #     resolved BOOLEAN DEFAULT FALSE,
 #     winning_option INTEGER,  -- Opzione vincente (NULL finché non risolto)
 #     creator_id BIGINT NOT NULL,
-#     creator_username TEXT
+#     creator_username TEXT,
+#     quotes INT[] NOT NULL -- Array di interi con le quote per ogni opzione
 # );
 # CREATE TABLE user_orascore (
 #     user_id BIGINT PRIMARY KEY,
@@ -434,6 +435,23 @@ def get_orascore(user_id):
         conn.close()
 
 
+@bot.message_handler(commands=['tutorial_poll'])
+def tutorial(message):
+    username = message.from_user.username or message.from_user.first_name or 'Utente'
+    tuto = (
+        f"Benvenuto {username} nel sistema polymarket di Orabot!\n"
+        f"I tuoi punti sono OraScore che puoi utilizzare per comprare quote nei sondaggi con /bet.\n"
+        f"Il prezzo di ogni quota di un'opzione è definito dal (rapporto tra numero di quote di quell'opzione e numero di quote totali del sondaggio) * 100.\n"
+        f"Inoltre, puoi creare tu stesso dei sondaggi con /poll.\n"
+        f"Una volta creato un sondaggio, esso rimarrà aperto fino al momento della chiusura.\n"
+        f"Per chiudere un sondaggio usa /solve_poll.\n"
+        f"Quando si chiude un sondaggio verrà distribuito 100 di OraScore per ogni quota vincente.\n"
+        f"Per sapere quali sondaggi sono attivi in questo momento utilizza /active_polls.\n"
+        f"Se sei curioso di sapere la classifica del server usa /orascore.\n"
+        f"Per guadagnare OraScore esiste il comando /daily di cui si può usufruire massimo una volta al giorno e che ti dà 75 di OraScore (si iniza con 100)."
+    )
+    bot.reply_to(message, tuto)
+
 @bot.message_handler(commands=['poll'])
 def poll(message):
     user_id = message.from_user.id
@@ -442,11 +460,11 @@ def poll(message):
 
     # Formato: /creasondaggio "Domanda?" "Opzione 1" "Opzione 2" ...
     if message.text == "":
-        bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/\"domanda\" \"opzione 1\" \"opzione 2\" ...")
+        bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/poll \"domanda\" \"opzione 1\" \"opzione 2\" ...")
         return
     parts = message.text.split('"')[1::2]
     if len(parts) < 3:
-        bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/\"domanda\" \"opzione 1\" \"opzione 2\" ...")
+        bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/poll \"domanda\" \"opzione 1\" \"opzione 2\" ...")
         return
     question = parts[0]
     options = parts[1:]
@@ -463,15 +481,19 @@ def poll(message):
         allows_multiple_answers=False,
         reply_to_message_id=message.id
     )
+
+    quotes = []
+    for _ in range(len(options)): 
+        quotes.append(1)
     
     conn, cur = get_pg_cursor()
     try:
         cur.execute(
-            "INSERT INTO polls (poll_id, chat_id, message_id, question, options, creator_id, creator_username) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (poll.id, chat_id, poll.message_id, question, options, user_id, username)
+            "INSERT INTO polls (poll_id, chat_id, message_id, question, options, creator_id, creator_username, quotes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (poll.id, chat_id, poll.message_id, question, options, user_id, username, quotes)
         )
         conn.commit()
-        bot.reply_to(poll, f"Pool_id: {poll.id}")
+        bot.reply_to(poll, f"Poll_id: {poll.id}")
     finally:
         conn.close()
             
@@ -481,23 +503,16 @@ def place_bet(message):
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name or 'Utente'
     
-    # Formato: /scommetti <poll_id> <option_num> <amount>
+    # Formato: /scommetti <poll_id> <option_num> <quotes_num>
     parts = message.text.split()
     if len(parts) < 4:
-        bot.reply_to(message, "Inserire la propria scomessa nel seguente formato: /bet <poll_id> <option_num> <amount>")
+        bot.reply_to(message, "Inserire la propria scomessa nel seguente formato: /bet <poll_id> <option_num> <quotes_num>")
         return
         
     poll_id = parts[1]
     option_id = int(parts[2])
-    amount = int(parts[3])
-    print(amount)
+    quotes = int(parts[3])
     current_points = get_orascore(user_id)
-    if amount <= 0:
-        bot.reply_to(message, "Ci hai provato! L'importo deve essere positivo.")
-        return
-    if current_points < amount:
-        bot.reply_to(message, f"Non hai abbastanza OraScore, povero! Hai solo {current_points} di OraScore.")
-        return
         
     conn, cur = get_pg_cursor()
     try:
@@ -514,19 +529,32 @@ def place_bet(message):
         if option_id < 0 or option_id >= len(poll[4]):
             bot.reply_to(message, "Opzione non valida.")
             return
+        
+        pricepq = (poll[9][option_id]/sum(poll[9]))*100
+        pricet = quotes*pricepq
+        if quotes <= 0:
+            bot.reply_to(message, "Per il momento non si possono ancora vendere quote.")
+            return
+        
+        if current_points < pricet:
+            bot.reply_to(message, f"Non hai abbastanza OraScore, povero! Hai solo {current_points} di OraScore.")
+            return
             
         cur.execute(
             "UPDATE user_orascore SET orascore = orascore - %s, locked_points = locked_points + %s WHERE user_id = %s",
-            (amount, amount, user_id)
+            (round(pricet), round(pricet), user_id)
         )
-        
+        quotesdb = poll[9]
+        quotesdb_togo = quotesdb
+        quotesdb_togo[option_id] += quotes
+        cur.execute("UPDATE polls SET quotes = %s WHERE poll_id = %s", (quotesdb_togo, poll_id))
         cur.execute(
-            "INSERT INTO bets (user_id, poll_id, option_id, amount) VALUES (%s, %s, %s, %s)",
-            (user_id, poll_id, option_id, amount)
+            "INSERT INTO bets (user_id, poll_id, option_id, amount, quotes) VALUES (%s, %s, %s, %s, %s)",
+            (user_id, poll_id, option_id, round(pricet), quotes)
         )
         option_text = poll[4][option_id]
         conn.commit()
-        bot.reply_to(message, f"{username} ha scommesso {amount} di OraScore sull'opzione {option_id}: {option_text} del sondaggio con id: {poll_id}!")
+        bot.reply_to(message, f"{username} ha scommesso {round(pricet)} di OraScore sull'opzione {option_id}: {option_text} del sondaggio con id: {poll_id}!")
     finally:
         conn.close()
         
@@ -579,24 +607,13 @@ def resolve_poll(message):
     try:
         cur.execute("SELECT * FROM bets WHERE poll_id = %s AND resolved = FALSE", (poll_id,))
         bets = cur.fetchall()
+        cur.execute("SELECT * FROM polls WHERE poll_id = %s", (poll_id,))
+        polls = cur.fetchall()
         
-        winning_points = 0
-        losing_points = 0
-        
-        for bet in bets:
-            if bet[3] == winning_option:
-                winning_points += bet[4]
-            else:
-                losing_points += bet[4]
-        
-        if winning_points > 0:
-            multiplier = 1 + (losing_points / winning_points)
-        else:
-            multiplier = 1
             
         for bet in bets:
             if bet[3] == winning_option:
-                win_amount = round(bet[4] * multiplier)
+                win_amount = round(bet[6]*100)
                 cur.execute(
                     "UPDATE user_orascore SET locked_points = locked_points - %s, orascore = orascore + %s WHERE user_id = %s",
                     (bet[4], win_amount, bet[1]))
@@ -626,9 +643,6 @@ def resolve_poll(message):
         result_text = (
             f"Sondaggio chiuso!\n"
             f"Opzione vincente: {winning_option}: {winning_text}\n"
-            f"Totale punti vincenti: {winning_points}\n"
-            f"Totale punti perdenti: {losing_points}\n"
-            f"Moltiplicatore: x{multiplier:.2f}\n"
         )
         bot.reply_to(message, result_text) 
 
@@ -687,7 +701,7 @@ def daily(message):
         
         if can_claim:
             if row:
-                new_points = row[0] + 15
+                new_points = row[0] + 75
                 cur.execute('''
                     UPDATE user_orascore
                     SET orascore = %s, 
@@ -698,18 +712,17 @@ def daily(message):
                 cur.execute('''
                     INSERT INTO user_orascore 
                     (user_id, username, orascore, last_daily_claim) 
-                    VALUES (%s, %s, 15, %s)
+                    VALUES (%s, %s, 175, %s)
                 ''', (user_id, username, now))
             
             conn.commit()
-            bot.reply_to(message, f"Ricompensa giornaliera di 15 di OraScore riscossa!\nOra {username} ha {get_orascore(user_id)} punti.")
+            bot.reply_to(message, f"Ricompensa giornaliera di 75 di OraScore riscossa!\nOra {username} ha {get_orascore(user_id)} punti.")
             
     finally:
         conn.close()
 
 @bot.message_handler(commands=['active_polls'])
 def active_polls(message):
-    chat_id = message.chat.id
     conn, cur = get_pg_cursor()
 
     actives = "Sondaggi ancora aperti:\n------------------------------------\n"
@@ -720,38 +733,21 @@ def active_polls(message):
         if not polls:
             bot.reply_to(message, "Nessun sondaggio attivo al momento.")
             return
-            
         for poll in polls:
             actives += f"Sondaggio: {poll[0]}\nCreato da: {poll[8]}\nDomanda: {poll[3]}\n"
             table = []
-            headers = ["Opz", "OS", "%", "x"]
-
-            total = 0 #sumop*100 / total
-            cur.execute('''SELECT amount FROM bets WHERE poll_id = %s''', (poll[0],))
-            amountst = cur.fetchall()
-            for amount in amountst:
-                    total += amount[0]
+            headers = ["Opzioni", "%"]
             for i in range(len(poll[4])):
                 option = []
-                cur.execute('''SELECT amount FROM bets WHERE poll_id = %s AND option_id = %s''', (poll[0], i))
-                amounts = cur.fetchall()
-                sumop = 0
-                for amount in amounts:
-                    sumop += amount[0]
                 perc = 0
-                if total != 0:
-                    perc = int((sumop*100)/total)
-                multiplier = ""
-                if sumop != 0:
-                    multiplier = f"{1 + ((total-sumop)/sumop):.2f}"
-                option.append(poll[4][i][:6])
-                option.append(sumop)
-                option.append(f"{perc}%")
-                option.append(multiplier)
+                if sum(poll[9]) != 0:
+                    perc = int(poll[9][i]/sum(poll[9])*100)
+                option.append(poll[4][i][:10])
+                option.append(f"{perc}")
                 table.append(option)
             actives += f"`{tabulate.tabulate(table, headers, tablefmt="simple")}`\n------------------------------------\n"
-
-        bot.reply_to(message, actives.replace('-', '\\-'), parse_mode='MarkdownV2')
+        print(actives)
+        bot.reply_to(message, actives.replace('-', '\\-').replace('_', '\\_'), parse_mode='MarkdownV2')
     finally:
         conn.close()
 
