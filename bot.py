@@ -414,7 +414,7 @@ def rm_random(message):
 #     userame TEXT,
 #     orascore INTEGER NOT NULL DEFAULT 0,
 #     locked_points INTEGER DEFAULT 0,
-#     last_daily_claim TIMESTAMP
+#     last_daily_claim INTEGER DEFAULT 0
 # );
 # CREATE TABLE bets (
 #     bet_id SERIAL PRIMARY KEY,
@@ -686,18 +686,15 @@ def daily(message):
         
         now = datetime.now()
         can_claim = True
+        now_int = now.day + now.month*100 + now.year*10000
         
         if row and row[1]:
             last_claim = row[1]
-            if now - last_claim < timedelta(hours=24):
+            if now_int == last_claim:
                 can_claim = False
-                next_claim = last_claim + timedelta(hours=24)
-                remaining = next_claim - now
-                hours = remaining.seconds // 3600
-                minutes = (remaining.seconds % 3600) // 60
                 bot.reply_to(message, 
                     f"Hai già riscosso la ricompensa giornaliera oggi!\n"
-                    f"Potrai riscuoterla di nuovo tra {hours} ore e {minutes} minuti.")
+                    f"Torna domani per riscuoterne un'altra.")
         
         if can_claim:
             if row:
@@ -707,13 +704,13 @@ def daily(message):
                     SET orascore = %s, 
                         last_daily_claim = %s 
                     WHERE user_id = %s
-                ''', (new_points, now, user_id))
+                ''', (new_points, now_int, user_id))
             else:
                 cur.execute('''
                     INSERT INTO user_orascore 
                     (user_id, username, orascore, last_daily_claim) 
                     VALUES (%s, %s, 175, %s)
-                ''', (user_id, username, now))
+                ''', (user_id, username, now_int))
             
             conn.commit()
             bot.reply_to(message, f"Ricompensa giornaliera di 75 di OraScore riscossa!\nOra {username} ha {get_orascore(user_id)} punti.")
@@ -750,5 +747,16 @@ def active_polls(message):
         bot.reply_to(message, actives.replace('-', '\\-').replace('_', '\\_'), parse_mode='MarkdownV2')
     finally:
         conn.close()
+
+#-----------------------------------------------------------------------------------------
+#   _____   _          _       ____   _       _____ 
+#  |  ___| | |        / \     / ___| | |     | ____|
+#  | |_    | |       / _ \   | |  _  | |     |  _|  
+#  |  _|   | |___   / ___ \  | |_| | | |___  | |___ 
+#  |_|     |_____| /_/   \_\  \____| |_____| |_____|
+#-----------------------------------------------------------------------------------------
+
+
+
 
 bot.infinity_polling()
