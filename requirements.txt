@@ -5,3 +5,5 @@ requests
 uvicorn
 keep-alive-ping
 tabulate
+numpy
+pillow
