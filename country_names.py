@@ -208,5 +208,11 @@ english_names_lower = [
 ]
 
 map_flags = {
-    "Trinidad and tobago": "Trinidad and Tobago"
+    "Trinidad and tobago": "Trinidad and Tobago",
+    "Antigua and barbuda": "Antigua and Barbuda",
+    "Democratic republic of the congo": "Democratic Republic of the Congo",
+    "Republic of the congo": "Republic of the Congo",
+    "Saint kitts and nevis": "Saint Kitts and Nevis",
+    "Saint vincent and the grenadines": "Saint Vincent and the Grenadines",
+    "São tomé and príncipe": "São Tomé and Príncipe"
 }
