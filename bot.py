@@ -6,10 +6,15 @@ import requests
 import telebot
 import string
 import tabulate
-from datetime import datetime, timedelta
+import urllib.parse
+import numpy as np
+from PIL import Image
+from io import BytesIO
+from datetime import datetime
 from telebot.types import InlineQueryResultArticle, InputTextMessageContent
 
 from johnson import johnson_image
+from country_names import italian_names, english_names, italian_names_lower, english_names_lower, map_flags
 
 from keep_alive_ping import create_service
 
@@ -23,12 +28,16 @@ host = os.environ.get('DB_HOST')
 user = os.environ.get('DB_USER')
 pwd = os.environ.get('DB_PASSWORD')
 
+
 started = False
 answer = ''
 quiz_id = None
 chat_quiz_id = None
+flag_id = None
+chat_flag_id = None
 guessed_by = []
 code = ""
+flagling = False
 
 def get_pg_cursor():
     conn = psycopg2.connect(
@@ -757,6 +766,259 @@ def active_polls(message):
 #-----------------------------------------------------------------------------------------
 
 
+def update_flagpoints(user_id, delta, username=None):
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute('SELECT flagpoints FROM user_flagpoints WHERE user_id = %s', (user_id,))
+        row = cur.fetchone()
+        
+        if row:
+            new_points = max(0, row[0] + delta)
+            cur.execute('''
+                UPDATE user_flagpoints 
+                SET flagpoints = %s
+                WHERE user_id = %s
+            ''', (new_points, user_id))
+        else:
+            initial_points = max(0, delta)
+            cur.execute('''
+                INSERT INTO user_flagpoints (user_id, username, flagpoints) 
+                VALUES (%s, %s, %s)
+            ''', (user_id, username, initial_points))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def download_flag(nazione, larghezza=1200):
+    if nazione in map_flags:
+        nazione = map_flags[nazione]
+        nome_file = "Flag_of_" + "_".join(word for word in nazione.split()) + ".svg"
+    else:
+        nome_file = "Flag_of_" + "_".join(word.capitalize() for word in nazione.split()) + ".svg"
+    nome_file_encoded = urllib.parse.quote(nome_file)
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    try:
+        url_api = f"https://commons.wikimedia.org/w/api.php?action=query&titles=File:{nome_file_encoded}&prop=imageinfo&iiprop=url&format=json"
+        response = requests.get(url_api, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        pagina = next(iter(data["query"]["pages"].values()))
+        imageinfo = pagina.get("imageinfo")
+        if not imageinfo:
+            raise ValueError(f"Bandiera non trovata: {nazione}")
+
+        url_base = imageinfo[0]["url"].replace("/commons/", "/commons/thumb/").split(".svg")[0]
+        url_finale = f"{url_base}.svg/{larghezza}px-{nome_file_encoded}.png"
+
+        r = requests.get(url_finale, headers=headers)
+        r.raise_for_status()
+        img = Image.open(BytesIO(r.content)).convert('RGB')
+
+        return img
+
+    except Exception as e:
+        print(f"Errore per '{nazione}': {str(e)}")
+        return None
+
+def flag_and(img1, img2):
+    arr1 = np.array(img1)
+    arr2 = np.array(img2.resize(img1.size))
+    
+    mask = np.all(arr1 == arr2, axis=-1)
+    
+    result = np.where(mask[..., None], arr1, 0)
+    
+    output_buffer = BytesIO()
+    Image.fromarray(result).save(output_buffer, format='PNG')
+    output_buffer.seek(0)
+    
+    return output_buffer
+
+def colori_simili(c1, c2, tolleranza=60):
+    return np.sqrt(np.sum((np.array(c1) - np.array(c2)) ** 2)) < tolleranza
+
+def update_flag_progress(original, progress, guess_img, tolleranza=30):
+    original_arr = np.array(original, dtype=np.float32)
+    guess_arr = np.array(guess_img.resize(original.size), dtype=np.float32)
+    progress_arr = np.array(progress, dtype=np.uint8)
+    try:
+        diff = np.sqrt(np.sum((original_arr - guess_arr) ** 2, axis=-1))
+    except Exception as e:
+        print(f"Errore nel calcolo della differenza: {e}")
+        return BytesIO()
+
+    mask = diff < tolleranza
+    
+    current_matches = np.any(progress_arr != [0, 0, 0], axis=-1)
+    combined_matches = mask | current_matches
+
+    result = np.where(combined_matches[..., None], original_arr, [0, 0, 0]).astype(np.uint8)
+
+    output_buffer = BytesIO()
+    Image.fromarray(result).save(output_buffer, format='PNG')
+    output_buffer.seek(0)
+
+    return output_buffer
+
+
+@bot.message_handler(commands=['flagle'])
+def flagle(message):
+    global secret_flag, secret_flag_original, secret_flag_progress, flagling, flag_id, chat_flag_id, starter_id, starter_username
+    starter_id = message.from_user.id
+    starter_username = message.from_user.username or message.from_user.first_name or 'Utente'
+    if flagling:
+        bot.reply_to(message, "Un'altra partita di flagle è già in corso.")
+        return
+    secret_flag = random.choice(english_names)
+    flagling = True
+    print(f"Bandiera segreta: {secret_flag}")
+    secret_flag_original = download_flag(secret_flag)
+    if secret_flag_original is None:
+        bot.reply_to(message, "Errore nel caricamento della bandiera segreta. Riprova.")
+        flagling = False
+        return
+    secret_flag_progress = Image.new('RGB', secret_flag_original.size, (0, 0, 0))
+    free_flag = random.choice(english_names)
+    bot.reply_to(message, f"Un nuovo game di Flagle è iniziato. \nProva a indovinare la bandiera con /guess <bandiera>\nAvrai un primo aiuto gratis con la bandiera: {italian_names[english_names.index(free_flag)]}.")
+    class MockMessage:
+        def __init__(self, text, chat_id, message_id, from_user):
+            self.text = text
+            self.chat = type('Chat', (), {'id': chat_id})
+            self.message_id = message_id
+            self.from_user = from_user
+            self.id = message.id
+    
+    mock_msg = MockMessage(
+        text=f"/guess {free_flag}",
+        chat_id=message.chat.id,
+        message_id=message.message_id,
+        from_user=message.from_user
+    )
+    guess(mock_msg, True)
+
+
+@bot.message_handler(commands=['guess'])
+def guess(message, free = False):
+    global secret_flag, secret_flag_original, secret_flag_progress, flagling, flag_id, chat_flag_id, starter_username
+    
+    if not flagling:
+        bot.reply_to(message, "Nessun game di flagle in corso.\nIniziane uno con /flagle.")
+        return
+        
+    username = message.from_user.username or message.from_user.first_name or 'Utente'
+    user_id = message.from_user.id
+    guessed_flag = get_text(message.text).replace('_', ' ').capitalize().strip()
+    
+    if not guessed_flag:
+        bot.reply_to(message, "Nessuna bandiera specificata.")
+        return
+    
+    if guessed_flag.lower() in italian_names_lower:
+        guessed_flag = english_names[italian_names_lower.index(guessed_flag.lower())]
+    elif guessed_flag.lower() not in english_names_lower:
+        bot.reply_to(message, "Bandiera inesistente!")
+        return
+
+    guessed_flag_img = download_flag(guessed_flag)
+    if guessed_flag_img is None:
+        bot.reply_to(message, "Errore nel caricamento della bandiera, riprova.")
+        return
+    
+    print(f"Guess: {guessed_flag}")
+    
+    try:
+        current_progress = Image.open(secret_flag_progress) if isinstance(secret_flag_progress, BytesIO) else secret_flag_progress
+        
+        updated_progress = update_flag_progress(secret_flag_original, current_progress, guessed_flag_img)
+        
+        secret_flag_progress = Image.open(updated_progress)
+        updated_progress.seek(0)
+
+        if flag_id is not None and chat_flag_id is not None:
+            bot.delete_message(chat_flag_id, flag_id)
+        
+        if guessed_flag == secret_flag:
+            if not free:
+                output_buffer = BytesIO()
+                secret_flag_original.save(output_buffer, format='PNG')
+                output_buffer.seek(0)
+                sent_flag = bot.send_photo(message.chat.id, output_buffer, 
+                                caption=f"Corretto!\n{username} ha guadagnato 8 FlagPoints!", 
+                                reply_to_message_id=message.id)
+                secret_flag = ""
+                flagling = False
+                update_flagpoints(user_id, 8, username)
+            else:
+                output_buffer = BytesIO()
+                secret_flag_original.save(output_buffer, format='PNG')
+                output_buffer.seek(0)
+                sent_flag = bot.send_photo(message.chat.id, output_buffer, 
+                                caption=f"La risposta corretta era: {secret_flag}, scarsi!\n{starter_username} ha perso 3 punti!", 
+                                reply_to_message_id=message.id)
+                secret_flag = ""
+                flagling = False
+                update_flagpoints(starter_id, -3, starter_username)
+        elif not free:
+            sent_flag = bot.send_photo(message.chat.id, updated_progress, 
+                            caption=f"Errato! {username} ha perso 1 punto!\nProgresso corrente:",
+                            reply_to_message_id=message.id)
+            update_flagpoints(user_id, -1, username)
+        else:
+            sent_flag = bot.send_photo(message.chat.id, updated_progress, 
+                            caption=f"Progresso corrente:",
+                            reply_to_message_id=message.id)
+            
+        flag_id = sent_flag.message_id
+        chat_flag_id = sent_flag.chat.id
+            
+    except Exception as e:
+        print(f"Errore durante l'aggiornamento del progresso: {str(e)}")
+        bot.reply_to(message, "Si è verificato un errore durante l'elaborazione. Riprova.")
+
+@bot.message_handler(commands=['arrendo'])
+def arrendo(message):
+    global starter_id, secret_flag, starter_username
+    if message.from_user.id == starter_id:
+        class MockMessage:
+            def __init__(self, text, chat_id, message_id, from_user):
+                self.text = text
+                self.chat = type('Chat', (), {'id': chat_id})
+                self.message_id = message_id + 1
+                self.from_user = from_user
+                self.id = message.id
+        
+        mock_msg = MockMessage(
+            text=f"/guess {secret_flag}",
+            chat_id=message.chat.id,
+            message_id=message.id,
+            from_user=message.from_user
+        )
+        guess(mock_msg, True)
+    else:
+        bot.reply_to(message, f"Solo {starter_username} può decidere di arrendersi!")
+
+@bot.message_handler(commands=['flagscore'])
+def flagscore(message):
+    conn, cur = get_pg_cursor()
+    try:
+        cur.execute('''
+            SELECT username, flagpoints 
+            FROM user_flagpoints 
+            ORDER BY flagpoints DESC 
+            LIMIT 12
+        ''')
+        rows = cur.fetchall()
+
+        ranking = "Classifica FlagPoints:\n--------------------------\n"
+        for username, points in rows:
+            ranking += f"{username or 'Utente'}: {points}\n"
+
+        bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
+    finally:
+        conn.close()
 
 
 bot.infinity_polling()
