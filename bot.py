@@ -694,6 +694,7 @@ def daily(message):
         row = cur.fetchone()
         
         now = datetime.now()
+        print(now)
         can_claim = True
         now_int = now.day + now.month*100 + now.year*10000
         
