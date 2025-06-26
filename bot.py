@@ -112,141 +112,141 @@ def testo(message):
 #   \___/   \___/  |_| |_| |_| \_| |____/   \___/  |_| \_|   |_|      \___/  |___| |_| \_|   |_|  
 #--------------------------------------------------------------------------------------------------
 
-def update_points(user_id, delta, username=None, correct=False, wrong=False):
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = %s', (user_id,))
-        row = cur.fetchone()
+# def update_points(user_id, delta, username=None, correct=False, wrong=False):
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = %s', (user_id,))
+#         row = cur.fetchone()
         
-        if row:
-            new_points = max(0, row[0] + delta)
-            correct_count = row[1] + (1 if correct else 0)
-            wrong_count = row[2] + (1 if wrong else 0)
-            cur.execute('''
-                UPDATE user_scores 
-                SET points = %s, correct_answers = %s, wrong_answers = %s 
-                WHERE user_id = %s
-            ''', (new_points, correct_count, wrong_count, user_id))
-        else:
-            initial_points = max(0, delta)
-            cur.execute('''
-                INSERT INTO user_scores (user_id, username, points, correct_answers, wrong_answers) 
-                VALUES (%s, %s, %s, %s, %s)
-            ''', (user_id, username, initial_points, 1 if correct else 0, 1 if wrong else 0))
-        conn.commit()
-    finally:
-        conn.close()
+#         if row:
+#             new_points = max(0, row[0] + delta)
+#             correct_count = row[1] + (1 if correct else 0)
+#             wrong_count = row[2] + (1 if wrong else 0)
+#             cur.execute('''
+#                 UPDATE user_scores 
+#                 SET points = %s, correct_answers = %s, wrong_answers = %s 
+#                 WHERE user_id = %s
+#             ''', (new_points, correct_count, wrong_count, user_id))
+#         else:
+#             initial_points = max(0, delta)
+#             cur.execute('''
+#                 INSERT INTO user_scores (user_id, username, points, correct_answers, wrong_answers) 
+#                 VALUES (%s, %s, %s, %s, %s)
+#             ''', (user_id, username, initial_points, 1 if correct else 0, 1 if wrong else 0))
+#         conn.commit()
+#     finally:
+#         conn.close()
 
 
-def get_points(user_id):
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute('SELECT points FROM user_scores WHERE user_id = %s', (user_id,))
-        row = cur.fetchone()
-        return row[0] if row else 0
-    finally:
-        conn.close()
+# def get_points(user_id):
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute('SELECT points FROM user_scores WHERE user_id = %s', (user_id,))
+#         row = cur.fetchone()
+#         return row[0] if row else 0
+#     finally:
+#         conn.close()
 
-def key():
-    lettere = ''.join(random.choices(string.ascii_uppercase, k=3))
+# def key():
+#     lettere = ''.join(random.choices(string.ascii_uppercase, k=3))
 
-    numeri = ''.join(random.choices(string.digits, k=3))
+#     numeri = ''.join(random.choices(string.digits, k=3))
     
-    chiave_mista = list(lettere + numeri)
-    random.shuffle(chiave_mista)
-    chiave = '-'.join([
-        ''.join(chiave_mista[:3]),
-        ''.join(chiave_mista[3:])
-    ])[:7]
+#     chiave_mista = list(lettere + numeri)
+#     random.shuffle(chiave_mista)
+#     chiave = '-'.join([
+#         ''.join(chiave_mista[:3]),
+#         ''.join(chiave_mista[3:])
+#     ])[:7]
 
-    return chiave
+#     return chiave
 
-@bot.message_handler(commands=['score'])
-def score(message):
-    conn, cur = get_pg_cursor()
-    try:
-        user_id = message.from_user.id
-        cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = %s', (user_id,))
-        row = cur.fetchone()
+# @bot.message_handler(commands=['score'])
+# def score(message):
+#     conn, cur = get_pg_cursor()
+#     try:
+#         user_id = message.from_user.id
+#         cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = %s', (user_id,))
+#         row = cur.fetchone()
         
-        if row:
-            points, correct, wrong = row
-            bot.reply_to(message, f"Hai {points} punti di Johnson.\nRisposte corrette: {correct}\nRisposte sbagliate: {wrong}")
-        else:
-            bot.reply_to(message, "Non ci sono abbastanza dati su di te.")
-    finally:
-        conn.close()
+#         if row:
+#             points, correct, wrong = row
+#             bot.reply_to(message, f"Hai {points} punti di Johnson.\nRisposte corrette: {correct}\nRisposte sbagliate: {wrong}")
+#         else:
+#             bot.reply_to(message, "Non ci sono abbastanza dati su di te.")
+#     finally:
+#         conn.close()
 
-@bot.message_handler(commands=['skill'])
-def skill(message):
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute('''
-            SELECT username, correct_answers, wrong_answers 
-            FROM user_scores 
-            ORDER BY (correct_answers::float)/(wrong_answers+1) DESC, correct_answers DESC
-            LIMIT 12
-        ''')
-        rows = cur.fetchall()
+# @bot.message_handler(commands=['skill'])
+# def skill(message):
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute('''
+#             SELECT username, correct_answers, wrong_answers 
+#             FROM user_scores 
+#             ORDER BY (correct_answers::float)/(wrong_answers+1) DESC, correct_answers DESC
+#             LIMIT 12
+#         ''')
+#         rows = cur.fetchall()
 
-        ranking = "Classifica skill Johnson:\nCorrette / Sbagliate\n--------------------------\n"
-        for username, correct, wrong in rows:
-            ranking += f"{username or 'Utente'}: {correct} / {wrong}\n"
+#         ranking = "Classifica skill Johnson:\nCorrette / Sbagliate\n--------------------------\n"
+#         for username, correct, wrong in rows:
+#             ranking += f"{username or 'Utente'}: {correct} / {wrong}\n"
 
-        bot.reply_to(message, ranking if rows else 'Nessun dato disponibile.')
-    finally:
-        conn.close()
+#         bot.reply_to(message, ranking if rows else 'Nessun dato disponibile.')
+#     finally:
+#         conn.close()
 
-@bot.message_handler(commands=['skillissue'])
-def skillissue(message):
-    global code
-    code = key()
-    username = message.from_user.username or message.from_user.first_name or 'Utente'
-    bot.reply_to(message, f'{username}!\nAttento! Stai per cancellare tutte le informazioni che ti riguardano!\nSei hai davvero così tanta skill issue rispondi con: "/confermo {code}" a questo messaggio.')
+# @bot.message_handler(commands=['skillissue'])
+# def skillissue(message):
+#     global code
+#     code = key()
+#     username = message.from_user.username or message.from_user.first_name or 'Utente'
+#     bot.reply_to(message, f'{username}!\nAttento! Stai per cancellare tutte le informazioni che ti riguardano!\nSei hai davvero così tanta skill issue rispondi con: "/confermo {code}" a questo messaggio.')
 
-@bot.message_handler(commands=['confermo'])
-def confermo(message):
-    global code
-    if code == "":
-        bot.reply_to(message, "Non hai generato ancora nessun codice.\nUsa /skillissue per saperne di più.")
-        return
-    if code == get_text(message.text).strip():
-        conn, cur = get_pg_cursor()
-        user_id = message.from_user.id
-        username = message.from_user.username or message.from_user.first_name or 'Utente'
-        try:
-            cur.execute('''
-                UPDATE user_scores 
-                SET points = %s, correct_answers = %s, wrong_answers = %s 
-                WHERE user_id = %s
-            ''', (0, 0, 0, user_id))
-            conn.commit()
-            bot.reply_to(message, f"Tutte le informazioni riguardanti {username} sono state ufficialmente cancellate!\nVedi di non skill issueare questa volta.")
-        finally:
-            conn.close()
-    else:
-        bot.reply_to(message, 'Chiave non valida.\nÈ necessario generarne una nuova.')
-    code = ""
+# @bot.message_handler(commands=['confermo'])
+# def confermo(message):
+#     global code
+#     if code == "":
+#         bot.reply_to(message, "Non hai generato ancora nessun codice.\nUsa /skillissue per saperne di più.")
+#         return
+#     if code == get_text(message.text).strip():
+#         conn, cur = get_pg_cursor()
+#         user_id = message.from_user.id
+#         username = message.from_user.username or message.from_user.first_name or 'Utente'
+#         try:
+#             cur.execute('''
+#                 UPDATE user_scores 
+#                 SET points = %s, correct_answers = %s, wrong_answers = %s 
+#                 WHERE user_id = %s
+#             ''', (0, 0, 0, user_id))
+#             conn.commit()
+#             bot.reply_to(message, f"Tutte le informazioni riguardanti {username} sono state ufficialmente cancellate!\nVedi di non skill issueare questa volta.")
+#         finally:
+#             conn.close()
+#     else:
+#         bot.reply_to(message, 'Chiave non valida.\nÈ necessario generarne una nuova.')
+#     code = ""
 
-@bot.message_handler(commands=['ranking'])
-def ranking(message):
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute('''
-            SELECT username, points 
-            FROM user_scores 
-            ORDER BY points DESC 
-            LIMIT 12
-        ''')
-        rows = cur.fetchall()
+# @bot.message_handler(commands=['ranking'])
+# def ranking(message):
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute('''
+#             SELECT username, points 
+#             FROM user_scores 
+#             ORDER BY points DESC 
+#             LIMIT 12
+#         ''')
+#         rows = cur.fetchall()
 
-        ranking = "Classifica punti Johnson:\n--------------------------\n"
-        for username, points in rows:
-            ranking += f"{username or 'Utente'}: {points}\n"
+#         ranking = "Classifica punti Johnson:\n--------------------------\n"
+#         for username, points in rows:
+#             ranking += f"{username or 'Utente'}: {points}\n"
 
-        bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
-    finally:
-        conn.close()
+#         bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
+#     finally:
+#         conn.close()
 
 @bot.inline_handler(func=lambda query: query.query.startswith('johnson'))
 def query_johnson(inline_query):
@@ -318,11 +318,11 @@ def ans(message):
         if get_text(message.text) == answer:
             bot.reply_to(message, 'Corretto!' + '\n' + username + " ha guadagnato 1 punto.", reply_markup=markup)
             answer = ''
-            update_points(user_id, 1, username, correct=True)
+            #update_points(user_id, 1, username, correct=True)
         else:
             bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 1 punto.", reply_markup=markup)
             answer = ''
-            update_points(user_id, -1, username, wrong=True)
+            #update_points(user_id, -1, username, wrong=True)
         if quiz_id:
             try:
                 bot.delete_message(message.chat.id, quiz_id)
@@ -434,14 +434,14 @@ def rm_random(message):
 #     resolved BOOLEAN DEFAULT FALSE,
 # );
 # """
-def get_orascore(user_id):
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute('SELECT orascore FROM user_orascore WHERE user_id = %s', (user_id,))
-        row = cur.fetchone()
-        return row[0] if row else 0
-    finally:
-        conn.close()
+# def get_orascore(user_id):
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute('SELECT orascore FROM user_orascore WHERE user_id = %s', (user_id,))
+#         row = cur.fetchone()
+#         return row[0] if row else 0
+#     finally:
+#         conn.close()
 
 
 @bot.message_handler(commands=['tutorial_poll'])
@@ -461,302 +461,304 @@ def tutorial(message):
     )
     bot.reply_to(message, tuto)
 
-@bot.message_handler(commands=['poll'])
-def poll(message):
-    user_id = message.from_user.id
-    username = message.from_user.username or message.from_user.first_name or 'Utente'
-    chat_id = message.chat.id
+# @bot.message_handler(commands=['poll'])
+# def poll(message):
+#     user_id = message.from_user.id
+#     username = message.from_user.username or message.from_user.first_name or 'Utente'
+#     chat_id = message.chat.id
 
-    # Formato: /creasondaggio "Domanda?" "Opzione 1" "Opzione 2" ...
-    if message.text == "":
-        bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/poll \"domanda\" \"opzione 1\" \"opzione 2\" ...")
-        return
-    parts = message.text.split('"')[1::2]
-    if len(parts) < 3:
-        bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/poll \"domanda\" \"opzione 1\" \"opzione 2\" ...")
-        return
-    question = parts[0]
-    options = parts[1:]
+#     # Formato: /creasondaggio "Domanda?" "Opzione 1" "Opzione 2" ...
+#     if message.text == "":
+#         bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/poll \"domanda\" \"opzione 1\" \"opzione 2\" ...")
+#         return
+#     parts = message.text.split('"')[1::2]
+#     if len(parts) < 3:
+#         bot.reply_to(message, "Inserire una domanda e almeno due risposte nel seguente formato:\n/poll \"domanda\" \"opzione 1\" \"opzione 2\" ...")
+#         return
+#     question = parts[0]
+#     options = parts[1:]
     
-    if len(options) < 2:
-        bot.reply_to(message, "Devi fornire almeno 2 opzioni.")
-        return
+#     if len(options) < 2:
+#         bot.reply_to(message, "Devi fornire almeno 2 opzioni.")
+#         return
         
-    poll = bot.send_poll(
-        chat_id=chat_id,
-        question=question,
-        options=options,
-        is_anonymous=False,
-        allows_multiple_answers=False,
-        reply_to_message_id=message.id
-    )
+#     poll = bot.send_poll(
+#         chat_id=chat_id,
+#         question=question,
+#         options=options,
+#         is_anonymous=False,
+#         allows_multiple_answers=False,
+#         reply_to_message_id=message.id
+#     )
 
-    quotes = []
-    for _ in range(len(options)): 
-        quotes.append(1)
+#     quotes = []
+#     for _ in range(len(options)): 
+#         quotes.append(1)
     
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute(
-            "INSERT INTO polls (poll_id, chat_id, message_id, question, options, creator_id, creator_username, quotes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-            (poll.id, chat_id, poll.message_id, question, options, user_id, username, quotes)
-        )
-        conn.commit()
-        bot.reply_to(poll, f"Poll_id: {poll.id}")
-    finally:
-        conn.close()
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute(
+#             "INSERT INTO polls (poll_id, chat_id, message_id, question, options, creator_id, creator_username, quotes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+#             (poll.id, chat_id, poll.message_id, question, options, user_id, username, quotes)
+#         )
+#         conn.commit()
+#         bot.reply_to(poll, f"Poll_id: {poll.id}")
+#     finally:
+#         conn.close()
             
 
-@bot.message_handler(commands=['bet'])
-def place_bet(message):
-    user_id = message.from_user.id
-    username = message.from_user.username or message.from_user.first_name or 'Utente'
+# @bot.message_handler(commands=['bet'])
+# def place_bet(message):
+#     user_id = message.from_user.id
+#     username = message.from_user.username or message.from_user.first_name or 'Utente'
     
-    # Formato: /scommetti <poll_id> <option_num> <quotes_num>
-    parts = message.text.split()
-    if len(parts) < 4:
-        bot.reply_to(message, "Inserire la propria scomessa nel seguente formato: /bet <poll_id> <option_num> <quotes_num>")
-        return
+#     # Formato: /scommetti <poll_id> <option_num> <quotes_num>
+#     parts = message.text.split()
+#     if len(parts) < 4:
+#         bot.reply_to(message, "Inserire la propria scomessa nel seguente formato: /bet <poll_id> <option_num> <quotes_num>")
+#         return
         
-    poll_id = parts[1]
-    option_id = int(parts[2])
-    quotes = int(parts[3])
-    current_points = get_orascore(user_id)
+#     poll_id = parts[1]
+#     option_id = int(parts[2])
+#     quotes = int(parts[3])
+#     current_points = get_orascore(user_id)
         
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute("SELECT * FROM polls WHERE poll_id = %s", (poll_id,))
-        poll = cur.fetchone()
-        if not poll:
-            bot.reply_to(message, "Sondaggio non trovato.")
-            return
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute("SELECT * FROM polls WHERE poll_id = %s", (poll_id,))
+#         poll = cur.fetchone()
+#         if not poll:
+#             bot.reply_to(message, "Sondaggio non trovato.")
+#             return
             
-        if user_id == poll[7]:
-            bot.reply_to(message, "Sei tu il creatore di questo sondaggio!")
-            return
+#         if user_id == poll[7]:
+#             bot.reply_to(message, "Sei tu il creatore di questo sondaggio!")
+#             return
         
-        if option_id < 0 or option_id >= len(poll[4]):
-            bot.reply_to(message, "Opzione non valida.")
-            return
+#         if option_id < 0 or option_id >= len(poll[4]):
+#             bot.reply_to(message, "Opzione non valida.")
+#             return
         
-        pricepq = (poll[9][option_id]/sum(poll[9]))*100
-        pricet = quotes*pricepq
-        if quotes <= 0:
-            bot.reply_to(message, "Per il momento non si possono ancora vendere quote.")
-            return
+#         pricepq = (poll[9][option_id]/sum(poll[9]))*100
+#         pricet = quotes*pricepq
+#         if quotes <= 0:
+#             bot.reply_to(message, "Per il momento non si possono ancora vendere quote.")
+#             return
         
-        if current_points < pricet:
-            bot.reply_to(message, f"Non hai abbastanza OraScore, povero! Hai solo {current_points} di OraScore.")
-            return
+#         if current_points < pricet:
+#             bot.reply_to(message, f"Non hai abbastanza OraScore, povero! Hai solo {current_points} di OraScore.")
+#             return
             
-        cur.execute(
-            "UPDATE user_orascore SET orascore = orascore - %s, locked_points = locked_points + %s WHERE user_id = %s",
-            (round(pricet), round(pricet), user_id)
-        )
-        quotesdb = poll[9]
-        quotesdb_togo = quotesdb
-        quotesdb_togo[option_id] += quotes
-        cur.execute("UPDATE polls SET quotes = %s WHERE poll_id = %s", (quotesdb_togo, poll_id))
-        cur.execute(
-            "INSERT INTO bets (user_id, poll_id, option_id, amount, quotes) VALUES (%s, %s, %s, %s, %s)",
-            (user_id, poll_id, option_id, round(pricet), quotes)
-        )
-        option_text = poll[4][option_id]
-        conn.commit()
-        bot.reply_to(message, f"{username} ha scommesso {round(pricet)} di OraScore sull'opzione {option_id}: {option_text} del sondaggio con id: {poll_id}!")
-    finally:
-        conn.close()
+#         cur.execute(
+#             "UPDATE user_orascore SET orascore = orascore - %s, locked_points = locked_points + %s WHERE user_id = %s",
+#             (round(pricet), round(pricet), user_id)
+#         )
+#         quotesdb = poll[9]
+#         quotesdb_togo = quotesdb
+#         quotesdb_togo[option_id] += quotes
+#         cur.execute("UPDATE polls SET quotes = %s WHERE poll_id = %s", (quotesdb_togo, poll_id))
+#         cur.execute(
+#             "INSERT INTO bets (user_id, poll_id, option_id, amount, quotes) VALUES (%s, %s, %s, %s, %s)",
+#             (user_id, poll_id, option_id, round(pricet), quotes)
+#         )
+#         option_text = poll[4][option_id]
+#         conn.commit()
+#         bot.reply_to(message, f"{username} ha scommesso {round(pricet)} di OraScore sull'opzione {option_id}: {option_text} del sondaggio con id: {poll_id}!")
+#     finally:
+#         conn.close()
         
 
-@bot.message_handler(commands=['solve_poll'])
-def resolve_poll(message):
-    # FORMATO: /risultato <poll_id> <winning_option_num>
-    if get_text(message.text).strip() == "":
-        bot.reply_to(message, "Inserire la solve del sondaggio nel seguente formato: /solve <poll_id> <winning_option_num>")
-        return
+# @bot.message_handler(commands=['solve_poll'])
+# def resolve_poll(message):
+#     # FORMATO: /risultato <poll_id> <winning_option_num>
+#     if get_text(message.text).strip() == "":
+#         bot.reply_to(message, "Inserire la solve del sondaggio nel seguente formato: /solve <poll_id> <winning_option_num>")
+#         return
     
-    parts = get_text(message.text).split()
-    if len(parts) != 2:
-        bot.reply_to(message, "Inserire la solve del sondaggio nel seguente formato: /solve <poll_id> <winning_option_num>")
-        return
-    poll_id = get_text(message.text).split()[0]
-    winning_option = int(get_text(message.text).split()[1])
-    user_id = message.from_user.id
+#     parts = get_text(message.text).split()
+#     if len(parts) != 2:
+#         bot.reply_to(message, "Inserire la solve del sondaggio nel seguente formato: /solve <poll_id> <winning_option_num>")
+#         return
+#     poll_id = get_text(message.text).split()[0]
+#     winning_option = int(get_text(message.text).split()[1])
+#     user_id = message.from_user.id
     
-    conn, cur = get_pg_cursor()
+#     conn, cur = get_pg_cursor()
 
-    try:
+#     try:
 
-        poll_id = parts[0]
+#         poll_id = parts[0]
 
-        conn, cur = get_pg_cursor()
+#         conn, cur = get_pg_cursor()
         
-        cur.execute("SELECT * FROM polls WHERE poll_id = %s", (poll_id,))
-        poll = cur.fetchone()
+#         cur.execute("SELECT * FROM polls WHERE poll_id = %s", (poll_id,))
+#         poll = cur.fetchone()
 
         
-        if not poll:
-            bot.reply_to(message, "Sondaggio non trovato o già risolto!")
-            return
-        winning_text = poll[4][winning_option]
-        if user_id != poll[7]:
-            bot.reply_to(message, f"Non sei tu il creatore di questo sondaggio!\nIl creatore è {poll[8]}")
-            return
+#         if not poll:
+#             bot.reply_to(message, "Sondaggio non trovato o già risolto!")
+#             return
+#         winning_text = poll[4][winning_option]
+#         if user_id != poll[7]:
+#             bot.reply_to(message, f"Non sei tu il creatore di questo sondaggio!\nIl creatore è {poll[8]}")
+#             return
             
-        if winning_option < 0 or winning_option >= len(poll[4]):
-            bot.reply_to(message, "Opzione non valida!")
-            return
+#         if winning_option < 0 or winning_option >= len(poll[4]):
+#             bot.reply_to(message, "Opzione non valida!")
+#             return
         
         
-    finally:
-        conn.close()
+#     finally:
+#         conn.close()
     
-    conn, cur = get_pg_cursor()
+#     conn, cur = get_pg_cursor()
 
-    try:
-        cur.execute("SELECT * FROM bets WHERE poll_id = %s AND resolved = FALSE", (poll_id,))
-        bets = cur.fetchall()
-        cur.execute("SELECT * FROM polls WHERE poll_id = %s", (poll_id,))
-        polls = cur.fetchall()
+#     try:
+#         cur.execute("SELECT * FROM bets WHERE poll_id = %s AND resolved = FALSE", (poll_id,))
+#         bets = cur.fetchall()
+#         cur.execute("SELECT * FROM polls WHERE poll_id = %s", (poll_id,))
+#         polls = cur.fetchall()
         
             
-        for bet in bets:
-            if bet[3] == winning_option:
-                win_amount = round(bet[6]*100)
-                cur.execute(
-                    "UPDATE user_orascore SET locked_points = locked_points - %s, orascore = orascore + %s WHERE user_id = %s",
-                    (bet[4], win_amount, bet[1]))
-            else:
-                cur.execute(
-                    "UPDATE user_orascore SET locked_points = locked_points - %s WHERE user_id = %s",
-                    (bet[4], bet[1]))
+#         for bet in bets:
+#             if bet[3] == winning_option:
+#                 win_amount = round(bet[6]*100)
+#                 cur.execute(
+#                     "UPDATE user_orascore SET locked_points = locked_points - %s, orascore = orascore + %s WHERE user_id = %s",
+#                     (bet[4], win_amount, bet[1]))
+#             else:
+#                 cur.execute(
+#                     "UPDATE user_orascore SET locked_points = locked_points - %s WHERE user_id = %s",
+#                     (bet[4], bet[1]))
             
-            cur.execute(
-                "UPDATE bets SET resolved = TRUE WHERE bet_id = %s",
-                (bet[0],)
-            )
+#             cur.execute(
+#                 "UPDATE bets SET resolved = TRUE WHERE bet_id = %s",
+#                 (bet[0],)
+#             )
         
-        cur.execute(
-            "DELETE FROM bets WHERE poll_id = %s",
-            (poll_id,)
-        )
+#         cur.execute(
+#             "DELETE FROM bets WHERE poll_id = %s",
+#             (poll_id,)
+#         )
 
-        cur.execute(
-            "DELETE FROM polls WHERE poll_id = %s",
-            (poll_id,)
-        )
+#         cur.execute(
+#             "DELETE FROM polls WHERE poll_id = %s",
+#             (poll_id,)
+#         )
 
         
-        conn.commit()
+#         conn.commit()
         
-        result_text = (
-            f"Sondaggio chiuso!\n"
-            f"Opzione vincente: {winning_option}: {winning_text}\n"
-        )
-        bot.reply_to(message, result_text) 
+#         result_text = (
+#             f"Sondaggio chiuso!\n"
+#             f"Opzione vincente: {winning_option}: {winning_text}\n"
+#         )
+#         bot.reply_to(message, result_text) 
 
-    except ValueError:
-        bot.reply_to(message, "L'opzione vincente deve essere un numero!")
-    finally:
-        conn.close()
+#     except ValueError:
+#         bot.reply_to(message, "L'opzione vincente deve essere un numero!")
+#     finally:
+#         conn.close()
 
-@bot.message_handler(commands=['orascore'])
-def orascore(message):
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute('''
-            SELECT username, orascore 
-            FROM user_orascore 
-            ORDER BY orascore DESC 
-            LIMIT 12
-        ''')
-        rows = cur.fetchall()
+# @bot.message_handler(commands=['orascore'])
+# def orascore(message):
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute('''
+#             SELECT username, orascore 
+#             FROM user_orascore 
+#             ORDER BY orascore DESC 
+#             LIMIT 12
+#         ''')
+#         rows = cur.fetchall()
 
-        ranking = "Classifica Orascore:\n--------------------------\n"
-        for username, points in rows:
-            ranking += f"{username or 'Utente'}: {points}\n"
+#         ranking = "Classifica Orascore:\n--------------------------\n"
+#         for username, points in rows:
+#             ranking += f"{username or 'Utente'}: {points}\n"
 
-        bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
-    finally:
-        conn.close()
+#         bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
+#     finally:
+#         conn.close()
 
-@bot.message_handler(commands=['daily'])
-def daily(message):
-    user_id = message.from_user.id
-    username = message.from_user.username or message.from_user.first_name or 'Utente'
+# @bot.message_handler(commands=['daily'])
+# def daily(message):
+#     user_id = message.from_user.id
+#     username = message.from_user.username or message.from_user.first_name or 'Utente'
     
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute('''
-            SELECT orascore, last_daily_claim FROM user_orascore
-            WHERE user_id = %s
-        ''', (user_id,))
-        row = cur.fetchone()
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute('''
+#             SELECT orascore, last_daily_claim FROM user_orascore
+#             WHERE user_id = %s
+#         ''', (user_id,))
+#         row = cur.fetchone()
         
-        now = datetime.now()
-        print(now)
-        can_claim = True
-        now_int = now.day + now.month*100 + now.year*10000
+#         now = datetime.now()
+#         print(now)
+
         
-        if row and row[1]:
-            last_claim = row[1]
-            if now_int == last_claim:
-                can_claim = False
-                bot.reply_to(message, 
-                    f"Hai già riscosso la ricompensa giornaliera oggi!\n"
-                    f"Torna domani per riscuoterne un'altra.")
+#         can_claim = True
+#         now_int = now.day + now.month*100 + now.year*10000
         
-        if can_claim:
-            if row:
-                new_points = row[0] + 75
-                cur.execute('''
-                    UPDATE user_orascore
-                    SET orascore = %s, 
-                        last_daily_claim = %s 
-                    WHERE user_id = %s
-                ''', (new_points, now_int, user_id))
-            else:
-                cur.execute('''
-                    INSERT INTO user_orascore 
-                    (user_id, username, orascore, last_daily_claim) 
-                    VALUES (%s, %s, 175, %s)
-                ''', (user_id, username, now_int))
+#         if row and row[1]:
+#             last_claim = row[1]
+#             if now_int == last_claim:
+#                 can_claim = False
+#                 bot.reply_to(message, 
+#                     f"Hai già riscosso la ricompensa giornaliera oggi!\n"
+#                     f"Torna domani per riscuoterne un'altra.")
+        
+#         if can_claim:
+#             if row:
+#                 new_points = row[0] + 75
+#                 cur.execute('''
+#                     UPDATE user_orascore
+#                     SET orascore = %s, 
+#                         last_daily_claim = %s 
+#                     WHERE user_id = %s
+#                 ''', (new_points, now_int, user_id))
+#             else:
+#                 cur.execute('''
+#                     INSERT INTO user_orascore 
+#                     (user_id, username, orascore, last_daily_claim) 
+#                     VALUES (%s, %s, 175, %s)
+#                 ''', (user_id, username, now_int))
             
-            conn.commit()
-            bot.reply_to(message, f"Ricompensa giornaliera di 75 di OraScore riscossa!\nOra {username} ha {get_orascore(user_id)} punti.")
+#             conn.commit()
+#             bot.reply_to(message, f"Ricompensa giornaliera di 75 di OraScore riscossa!\nOra {username} ha {get_orascore(user_id)} punti.")
             
-    finally:
-        conn.close()
+#     finally:
+#         conn.close()
 
-@bot.message_handler(commands=['active_polls'])
-def active_polls(message):
-    conn, cur = get_pg_cursor()
+# @bot.message_handler(commands=['active_polls'])
+# def active_polls(message):
+#     conn, cur = get_pg_cursor()
 
-    actives = "Sondaggi ancora aperti:\n------------------------------------\n"
-    try:
-        cur.execute('''SELECT * FROM polls''')
-        polls = cur.fetchall()
+#     actives = "Sondaggi ancora aperti:\n------------------------------------\n"
+#     try:
+#         cur.execute('''SELECT * FROM polls''')
+#         polls = cur.fetchall()
 
-        if not polls:
-            bot.reply_to(message, "Nessun sondaggio attivo al momento.")
-            return
-        for poll in polls:
-            actives += f"Sondaggio: {poll[0]}\nCreato da: {poll[8]}\nDomanda: {poll[3]}\n"
-            table = []
-            headers = ["Opzioni", "%"]
-            for i in range(len(poll[4])):
-                option = []
-                perc = 0
-                if sum(poll[9]) != 0:
-                    perc = int(poll[9][i]/sum(poll[9])*100)
-                option.append(poll[4][i][:10])
-                option.append(f"{perc}")
-                table.append(option)
-            actives += f"`{tabulate.tabulate(table, headers, tablefmt="simple")}`\n------------------------------------\n"
-        print(actives)
-        bot.reply_to(message, actives.replace('-', '\\-').replace('_', '\\_'), parse_mode='MarkdownV2')
-    finally:
-        conn.close()
+#         if not polls:
+#             bot.reply_to(message, "Nessun sondaggio attivo al momento.")
+#             return
+#         for poll in polls:
+#             actives += f"Sondaggio: {poll[0]}\nCreato da: {poll[8]}\nDomanda: {poll[3]}\n"
+#             table = []
+#             headers = ["Opzioni", "%"]
+#             for i in range(len(poll[4])):
+#                 option = []
+#                 perc = 0
+#                 if sum(poll[9]) != 0:
+#                     perc = int(poll[9][i]/sum(poll[9])*100)
+#                 option.append(poll[4][i][:10])
+#                 option.append(f"{perc}")
+#                 table.append(option)
+#             actives += f"`{tabulate.tabulate(table, headers, tablefmt="simple")}`\n------------------------------------\n"
+#         print(actives)
+#         bot.reply_to(message, actives.replace('-', '\\-').replace('_', '\\_'), parse_mode='MarkdownV2')
+#     finally:
+#         conn.close()
 
 #-----------------------------------------------------------------------------------------
 #   _____   _          _       ____   _       _____ 
@@ -767,28 +769,28 @@ def active_polls(message):
 #-----------------------------------------------------------------------------------------
 
 
-def update_flagpoints(user_id, delta, username=None):
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute('SELECT flagpoints FROM user_flagpoints WHERE user_id = %s', (user_id,))
-        row = cur.fetchone()
+# def update_flagpoints(user_id, delta, username=None):
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute('SELECT flagpoints FROM user_flagpoints WHERE user_id = %s', (user_id,))
+#         row = cur.fetchone()
         
-        if row:
-            new_points = max(0, row[0] + delta)
-            cur.execute('''
-                UPDATE user_flagpoints 
-                SET flagpoints = %s
-                WHERE user_id = %s
-            ''', (new_points, user_id))
-        else:
-            initial_points = max(0, delta)
-            cur.execute('''
-                INSERT INTO user_flagpoints (user_id, username, flagpoints) 
-                VALUES (%s, %s, %s)
-            ''', (user_id, username, initial_points))
-        conn.commit()
-    finally:
-        conn.close()
+#         if row:
+#             new_points = max(0, row[0] + delta)
+#             cur.execute('''
+#                 UPDATE user_flagpoints 
+#                 SET flagpoints = %s
+#                 WHERE user_id = %s
+#             ''', (new_points, user_id))
+#         else:
+#             initial_points = max(0, delta)
+#             cur.execute('''
+#                 INSERT INTO user_flagpoints (user_id, username, flagpoints) 
+#                 VALUES (%s, %s, %s)
+#             ''', (user_id, username, initial_points))
+#         conn.commit()
+#     finally:
+#         conn.close()
 
 
 def download_flag(nazione, larghezza=1200):
@@ -951,7 +953,7 @@ def guess(message, free = False):
                                 reply_to_message_id=message.id)
                 secret_flag = ""
                 flagling = False
-                update_flagpoints(user_id, 8, username)
+                #update_flagpoints(user_id, 8, username)
             else:
                 output_buffer = BytesIO()
                 secret_flag_original.save(output_buffer, format='PNG')
@@ -961,12 +963,12 @@ def guess(message, free = False):
                                 reply_to_message_id=message.id)
                 secret_flag = ""
                 flagling = False
-                update_flagpoints(starter_id, -3, starter_username)
+                #update_flagpoints(starter_id, -3, starter_username)
         elif not free:
             sent_flag = bot.send_photo(message.chat.id, updated_progress, 
                             caption=f"Errato! {username} ha perso 1 punto!\nProgresso corrente:",
                             reply_to_message_id=message.id)
-            update_flagpoints(user_id, -1, username)
+            #update_flagpoints(user_id, -1, username)
         else:
             sent_flag = bot.send_photo(message.chat.id, updated_progress, 
                             caption=f"Progresso corrente:",
@@ -1001,25 +1003,25 @@ def arrendo(message):
     else:
         bot.reply_to(message, f"Solo {starter_username} può decidere di arrendersi!")
 
-@bot.message_handler(commands=['flagscore'])
-def flagscore(message):
-    conn, cur = get_pg_cursor()
-    try:
-        cur.execute('''
-            SELECT username, flagpoints 
-            FROM user_flagpoints 
-            ORDER BY flagpoints DESC 
-            LIMIT 12
-        ''')
-        rows = cur.fetchall()
+# @bot.message_handler(commands=['flagscore'])
+# def flagscore(message):
+#     conn, cur = get_pg_cursor()
+#     try:
+#         cur.execute('''
+#             SELECT username, flagpoints 
+#             FROM user_flagpoints 
+#             ORDER BY flagpoints DESC 
+#             LIMIT 12
+#         ''')
+#         rows = cur.fetchall()
 
-        ranking = "Classifica FlagPoints:\n--------------------------\n"
-        for username, points in rows:
-            ranking += f"{username or 'Utente'}: {points}\n"
+#         ranking = "Classifica FlagPoints:\n--------------------------\n"
+#         for username, points in rows:
+#             ranking += f"{username or 'Utente'}: {points}\n"
 
-        bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
-    finally:
-        conn.close()
+#         bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
+#     finally:
+#         conn.close()
 
 
 bot.infinity_polling()
