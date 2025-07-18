@@ -1,5 +1,4 @@
 fastapi
-psycopg2
 pyTelegramBotAPI
 requests
 uvicorn
@@ -7,3 +6,4 @@ keep-alive-ping
 tabulate
 numpy
 pillow
+pymongo
