@@ -335,7 +335,10 @@ def quiz(message):
     options = random.sample(johnson_image, 3)
     answer = random.choice(options).replace('_', ' ')
     if quiz_id is not None and chat_quiz_id is not None:
-        bot.delete_message(chat_quiz_id, quiz_id)
+        try:
+            bot.delete_message(chat_quiz_id, quiz_id)
+        except:
+            pass
 
     markup = telebot.types.ReplyKeyboardMarkup()
     for item in options:
@@ -1071,7 +1074,10 @@ def guess(message, free = False):
         updated_progress.seek(0)
 
         if flag_id is not None and chat_flag_id is not None:
-            bot.delete_message(chat_flag_id, flag_id)
+            try:
+                bot.delete_message(chat_flag_id, flag_id)
+            except:
+                pass
         
         if guessed_flag == secret_flag:
             if not free:
