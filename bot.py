@@ -358,13 +358,13 @@ def ans(message):
     elif user_id not in guessed_by:
         guessed_by.append(user_id)
         if get_text(message.text) == answer:
-            bot.reply_to(message, 'Corretto!' + '\n' + username + " ha guadagnato 1 punto.", reply_markup=markup)
+            bot.reply_to(message, 'Corretto!' + '\n' + username + " ha guadagnato 10 punti.", reply_markup=markup)
             answer = ''
-            update_points(message,user_id, 1, username, correct=True)
+            update_points(message,user_id, 10, username, correct=True)
         else:
-            bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 1 punto.", reply_markup=markup)
+            bot.reply_to(message, 'Errato! La risposta corretta è ' + answer.replace('_', ' ') + '.\n' + username + " ha perso 10 punti.", reply_markup=markup)
             answer = ''
-            update_points(message,user_id, -1, username, wrong=True)
+            update_points(message,user_id, -10, username, wrong=True)
         if quiz_id:
             try:
                 bot.delete_message(message.chat.id, quiz_id)
@@ -820,7 +820,7 @@ def daily(message):
         
         if can_claim:
             if row:
-                new_points = row["oracoins"] + 75
+                new_points = row["oracoins"] + 100
                 oracoin.update_one({"server_id":message.chat.id},{"$set":{f"data.{user_id}.oracoins":new_points,f"data.{user_id}.last_daily_claim":now_int}})
                 # cur.execute('''
                 #     UPDATE user_orascore
@@ -1079,29 +1079,29 @@ def guess(message, free = False):
                 secret_flag_original.save(output_buffer, format='PNG')
                 output_buffer.seek(0)
                 sent_flag = bot.send_photo(message.chat.id, output_buffer, 
-                                caption=f"Corretto!\n{username} ha guadagnato 8 Oracoin!", 
+                                caption=f"Corretto!\n{username} ha guadagnato 50 Oracoin!", 
                                 reply_to_message_id=message.id)
                 secret_flag = ""
                 flagling = False
-                update_points(message,user_id,8,username)
+                update_points(message,user_id,50,username)
                 #update_flagpoints(user_id, 8, username)
             else:
                 output_buffer = BytesIO()
                 secret_flag_original.save(output_buffer, format='PNG')
                 output_buffer.seek(0)
                 sent_flag = bot.send_photo(message.chat.id, output_buffer, 
-                                caption=f"La risposta corretta era: {secret_flag}, scarsi!\n{starter_username} ha perso 3 Oracoin!", 
+                                caption=f"La risposta corretta era: {secret_flag}, scarsi!\n{starter_username} ha perso 20 Oracoin!", 
                                 reply_to_message_id=message.id)
                 secret_flag = ""
                 flagling = False
-                update_points(message,starter_id,-3,starter_username)
+                update_points(message,starter_id,-20,starter_username)
                 #update_flagpoints(starter_id, -3, starter_username)
         elif not free:
             sent_flag = bot.send_photo(message.chat.id, updated_progress, 
-                            caption=f"Errato! {username} ha perso 1 Oracoin!\nProgresso corrente:",
+                            caption=f"Errato! {username} ha perso 7 Oracoin!\nProgresso corrente:",
                             reply_to_message_id=message.id)
 
-            update_points(message,user_id,-1,username)
+            update_points(message,user_id,-7,username)
             #update_flagpoints(user_id, -1, username)
         else:
             sent_flag = bot.send_photo(message.chat.id, updated_progress, 
