@@ -944,7 +944,7 @@ def download_flag(nazione, larghezza=1200):
 
     except Exception as e:
         print(f"Errore per '{nazione}': {str(e)}")
-        return Image.Image() #HACK: per evitare che il type checker si lamenti
+        return None
 
 def flag_and(img1, img2):
     arr1 = np.array(img1)
