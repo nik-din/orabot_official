@@ -124,7 +124,6 @@ def testo(message):
         for tag in statement['tags']:
             tg += '<span class="tg-spoiler">' + tag['name'] + '</span> '
         bot.send_document(message.chat.id, link, message.id, name + '\n' + pt + '\n' + tl + '\n' + ml + '\n' + tg, parse_mode='HTML')
-        # bot.send_document(message.chat.id, link, message.id, name + '\n' + tl + '\n' + ml)
     else:
         bot.reply_to(message, 'Nome del problema sbagliato. Riprovare.')
 
@@ -137,9 +136,7 @@ def testo(message):
 #--------------------------------------------------------------------------------------------------
 
 def update_points(message,user_id, delta, username=None, correct=False, wrong=False):
-    # conn, cur = get_pg_cursor()
     try:
-        # cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = %s', (user_id,))
         oracoin:Collection[Oracoin]=db["oracoin"]
         
         doc=oracoin.find_one({"server_id":message.chat.id})
@@ -152,143 +149,19 @@ def update_points(message,user_id, delta, username=None, correct=False, wrong=Fa
         if row:
             print(row["oracoins"])
             new_points = max(0, row["oracoins"] + delta)
-            # correct_count = row[1] + (1 if correct else 0)
-            # wrong_count = row[2] + (1 if wrong else 0)
             oracoin.find_one_and_update({"server_id":message.chat.id},{"$set":{f"data.{user_id}.oracoins":new_points}})
-            # cur.execute('''
-            #     UPDATE user_scores 
-            #     SET points = %s, correct_answers = %s, wrong_answers = %s 
-            #     WHERE user_id = %s
-            # ''', (new_points, correct_count, wrong_count, user_id))
         else:
             initial_points = max(0, delta)
             base_data:OracoinUser={
                 "oracoins":initial_points,
                 "username":str(username),
                 "locked_points":0,
-                "last_daily_claim":0,
             } 
             oracoin.find_one_and_update({"server_id":message.chat.id},{"$set":{f"data.{user_id}":base_data}})
 
-            # cur.execute('''
-            #     INSERT INTO user_scores (user_id, username, points, correct_answers, wrong_answers) 
-            #     VALUES (%s, %s, %s, %s, %s)
-            # ''', (user_id, username, initial_points, 1 if correct else 0, 1 if wrong else 0))
-        # conn.commit()
     finally:
         pass
-        # conn.close()
 
-
-# def get_points(user_id):
-#     conn, cur = get_pg_cursor()
-#     try:
-#         cur.execute('SELECT points FROM user_scores WHERE user_id = %s', (user_id,))
-#         row = cur.fetchone()
-#         return row[0] if row else 0
-#     finally:
-#         conn.close()
-
-# def key():
-#     lettere = ''.join(random.choices(string.ascii_uppercase, k=3))
-
-#     numeri = ''.join(random.choices(string.digits, k=3))
-    
-#     chiave_mista = list(lettere + numeri)
-#     random.shuffle(chiave_mista)
-#     chiave = '-'.join([
-#         ''.join(chiave_mista[:3]),
-#         ''.join(chiave_mista[3:])
-#     ])[:7]
-
-#     return chiave
-
-# @bot.message_handler(commands=['score'])
-# def score(message):
-#     conn, cur = get_pg_cursor()
-#     try:
-#         user_id = message.from_user.id
-#         cur.execute('SELECT points, correct_answers, wrong_answers FROM user_scores WHERE user_id = %s', (user_id,))
-#         row = cur.fetchone()
-        
-#         if row:
-#             points, correct, wrong = row
-#             bot.reply_to(message, f"Hai {points} punti di Johnson.\nRisposte corrette: {correct}\nRisposte sbagliate: {wrong}")
-#         else:
-#             bot.reply_to(message, "Non ci sono abbastanza dati su di te.")
-#     finally:
-#         conn.close()
-
-# @bot.message_handler(commands=['skill'])
-# def skill(message):
-#     conn, cur = get_pg_cursor()
-#     try:
-#         cur.execute('''
-#             SELECT username, correct_answers, wrong_answers 
-#             FROM user_scores 
-#             ORDER BY (correct_answers::float)/(wrong_answers+1) DESC, correct_answers DESC
-#             LIMIT 12
-#         ''')
-#         rows = cur.fetchall()
-
-#         ranking = "Classifica skill Johnson:\nCorrette / Sbagliate\n--------------------------\n"
-#         for username, correct, wrong in rows:
-#             ranking += f"{username or 'Utente'}: {correct} / {wrong}\n"
-
-#         bot.reply_to(message, ranking if rows else 'Nessun dato disponibile.')
-#     finally:
-#         conn.close()
-
-# @bot.message_handler(commands=['skillissue'])
-# def skillissue(message):
-#     global code
-#     code = key()
-#     username = message.from_user.username or message.from_user.first_name or 'Utente'
-#     bot.reply_to(message, f'{username}!\nAttento! Stai per cancellare tutte le informazioni che ti riguardano!\nSei hai davvero così tanta skill issue rispondi con: "/confermo {code}" a questo messaggio.')
-
-# @bot.message_handler(commands=['confermo'])
-# def confermo(message):
-#     global code
-#     if code == "":
-#         bot.reply_to(message, "Non hai generato ancora nessun codice.\nUsa /skillissue per saperne di più.")
-#         return
-#     if code == get_text(message.text).strip():
-#         conn, cur = get_pg_cursor()
-#         user_id = message.from_user.id
-#         username = message.from_user.username or message.from_user.first_name or 'Utente'
-#         try:
-#             cur.execute('''
-#                 UPDATE user_scores 
-#                 SET points = %s, correct_answers = %s, wrong_answers = %s 
-#                 WHERE user_id = %s
-#             ''', (0, 0, 0, user_id))
-#             conn.commit()
-#             bot.reply_to(message, f"Tutte le informazioni riguardanti {username} sono state ufficialmente cancellate!\nVedi di non skill issueare questa volta.")
-#         finally:
-#             conn.close()
-#     else:
-#         bot.reply_to(message, 'Chiave non valida.\nÈ necessario generarne una nuova.')
-#     code = ""
-
-# @bot.message_handler(commands=['ranking'])
-# def ranking(message):
-#     conn, cur = get_pg_cursor()
-#     try:
-#         cur.execute('''
-#             SELECT username, points 
-#             FROM user_scores 
-#             ORDER BY points DESC 
-#             LIMIT 12
-#         ''')
-#         rows = cur.fetchall()
-
-#         ranking = "Classifica punti Johnson:\n--------------------------\n"
-#         for username, points in rows:
-#             ranking += f"{username or 'Utente'}: {points}\n"
-
-#         bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
-#     finally:
-#         conn.close()
 
 @bot.inline_handler(func=lambda query: query.query.startswith('johnson'))
 def query_johnson(inline_query):
@@ -414,17 +287,6 @@ def add_random(message):
     else: 
         bot.reply_to(message, 'Questa frase è già stata inserita!')
 
-
-    # if text != '':
-    #     with psycopg2.connect(host=host, database=db, user=user,password=pwd) as conn:
-    #         with conn.cursor() as cur:
-    #             try:
-    #                 cur.execute('INSERT INTO random (frase) VALUES (%s)', (text,))
-    #                 bot.reply_to(message, 'Aggiunto!')
-    #             except:
-    #                 bot.reply_to(message, 'Questa frase è già stata inserita!')
-    # else:
-    #     bot.reply_to(message, 'Inserire un messaggio.')
 @bot.message_handler(commands=['rm_random'])
 def rm_random(message):
     if not message.reply_to_message:
@@ -465,36 +327,6 @@ def rm_random(message):
 #   \___/  |_| \_\ /_/   \_\ |____/   \____|  \___/  |_| \_\ |_____|
 #-----------------------------------------------------------------------------------------
 
-
-# """
-# CREATE TABLE polls (
-#     poll_id TEXT PRIMARY KEY,
-#     chat_id BIGINT NOT NULL,
-#     message_id INTEGER NOT NULL,
-#     question TEXT NOT NULL,
-#     options TEXT[] NOT NULL,  -- Array di stringhe con le opzioni
-#     resolved BOOLEAN DEFAULT FALSE,
-#     winning_option INTEGER,  -- Opzione vincente (NULL finché non risolto)
-#     creator_id BIGINT NOT NULL,
-#     creator_username TEXT,
-#     quotes INT[] NOT NULL -- Array di interi con le quote per ogni opzione
-# );
-# CREATE TABLE user_orascore (
-#     user_id BIGINT PRIMARY KEY,
-#     userame TEXT,
-#     orascore INTEGER NOT NULL DEFAULT 0,
-#     locked_points INTEGER DEFAULT 0,
-#     last_daily_claim INTEGER DEFAULT 0
-# );
-# CREATE TABLE bets (
-#     bet_id SERIAL PRIMARY KEY,
-#     user_id BIGINT NOT NULL,
-#     poll_id TEXT NOT NULL,
-#     option_id INTEGER NOT NULL,
-#     amount INTEGER NOT NULL,
-#     resolved BOOLEAN DEFAULT FALSE,
-# );
-# """
 def get_orascore(server_id:int,user_id:int|str):
 
     oracoin:Collection[Oracoin]=db["oracoin"]
@@ -503,14 +335,6 @@ def get_orascore(server_id:int,user_id:int|str):
     if doc is None: return 0
 
     return doc["data"][str(user_id)]["oracoins"] if doc["data"].get(str(user_id)) else 0
-
-    # conn, cur = get_pg_cursor()
-    # try:
-    #     cur.execute('SELECT orascore FROM user_orascore WHERE user_id = %s', (user_id,))
-    #     row = cur.fetchone()
-    #     return row[0] if row else 0
-    # finally:
-    #     conn.close()
 
 
 @bot.message_handler(commands=['tutorial_poll'])
@@ -525,8 +349,7 @@ def tutorial(message):
         f"Per chiudere un sondaggio usa /solve_poll.\n"
         f"Quando si chiude un sondaggio verrà distribuito 100 Oracoins per ogni quota vincente.\n"
         f"Per sapere quali sondaggi sono attivi in questo momento utilizza /active_polls.\n"
-        f"Se sei curioso di sapere la classifica del server usa /orascore.\n"
-        f"Per guadagnare Oracoins esiste il comando /daily di cui si può usufruire massimo una volta al giorno e che ti dà 75 Oracoins (si iniza con 100)."
+        f"Se sei curioso di sapere la classifica del server usa /orascore."
     )
     bot.reply_to(message, tuto)
 
@@ -637,15 +460,11 @@ def place_bet(message):
         
     oracoin.update_one({"server_id":message.chat.id},{"$inc":{f"data.{user_id}.oracoins":-round(pricet),f"data.{user_id}.locked_points":round(pricet)}})
 
-    # cur.execute(
-    #     "UPDATE user_orascore SET orascore = orascore - %s, locked_points = locked_points + %s WHERE user_id = %s",
-    #     (round(pricet), round(pricet), user_id)
-    # )
     quotesdb = poll["quotes"]
     quotesdb_togo = quotesdb
     quotesdb_togo[option_id] += quotes
     polymarket.update_one({"server_id":message.chat.id},{"$set":{f"polls.{poll_id}.quotes":quotesdb_togo}})
-    # cur.execute("UPDATE polls SET quotes = %s WHERE poll_id = %s", (quotesdb_togo, poll_id))
+    
     bet=Bet(
         user_id=user_id,
         option_id=option_id,
@@ -653,10 +472,7 @@ def place_bet(message):
         quotes=quotes
     )
     polymarket.update_one({"server_id":message.chat.id},{"$push":{f"polls.{poll_id}.bets":bet}})
-    # cur.execute(
-    #     "INSERT INTO bets (user_id, poll_id, option_id, amount, quotes) VALUES (%s, %s, %s, %s, %s)",
-    #     (user_id, poll_id, option_id, round(pricet), quotes)
-    # )
+
     option_text = poll["options"][option_id]
     bot.reply_to(message, f"{username} ha scommesso {round(pricet)} Oracoins sull'opzione {option_id}: {option_text} del sondaggio con id: {poll_id}!")
             
@@ -715,37 +531,15 @@ def resolve_poll(message):
 
 
     bets = poll["bets"]
-    # cur.execute("SELECT * FROM polls WHERE poll_id = %s", (poll_id,))
-    # polls = cur.fetchall()
     
         
     for bet in bets:
         if bet["option_id"] == winning_option:
             win_amount = round(bet["quotes"]*100)
             oracoin.update_one({"server_id":message.chat.id},{"$inc":{f"data.{bet["user_id"]}.oracoins":win_amount,f"data.{bet["user_id"]}.locked_points":-bet["amount"]}})
-            # cur.execute(
-            #     "UPDATE user_orascore SET locked_points = locked_points - %s, orascore = orascore + %s WHERE user_id = %s",
-            #     (bet["amount"], win_amount, bet["user_id"]))
+            
         else:
             oracoin.update_one({"server_id":message.chat.id},{"$inc":{f"data.{bet["user_id"]}.locked_points":-bet["amount"]}})
-            # cur.execute(
-            #     "UPDATE user_orascore SET locked_points = locked_points - %s WHERE user_id = %s",
-            #     (bet[4], bet[1]))
-        
-        # cur.execute(
-        #     "UPDATE bets SET resolved = TRUE WHERE bet_id = %s",
-        #     (bet[0],)
-        # )
-    
-    # cur.execute(
-    #     "DELETE FROM bets WHERE poll_id = %s",
-    #     (poll_id,)
-    # )
-
-    # cur.execute(
-    #     "DELETE FROM polls WHERE poll_id = %s",
-    #     (poll_id,)
-    # )
 
     polymarket.update_one({"server_id":message.chat.id},{"$unset":{f"polls.{poll_id}":""}})
     
@@ -769,16 +563,7 @@ def orascore(message):
         rows.append((x["oracoins"],x["username"]))
     rows=sorted(rows,reverse=True)
     rows=rows[:12]
-    # conn, cur = get_pg_cursor()
     try:
-        # cur.execute('''
-        #     SELECT username, orascore 
-        #     FROM user_orascore 
-        #     ORDER BY orascore DESC 
-        #     LIMIT 12
-        # ''')
-        # rows = cur.fetchall()
-
         ranking = "Classifica Oracoins:\n--------------------------\n"
         for points,username in rows:
             ranking += f"{username or 'Utente'}: {points}\n"
@@ -786,67 +571,7 @@ def orascore(message):
         bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
     finally:
         pass
-    #     conn.close()
 
-@bot.message_handler(commands=['daily'])
-def daily(message):
-    user_id = message.from_user.id
-    username = message.from_user.username or message.from_user.first_name or 'Utente'
-    oracoin:Collection[Oracoin]=db["oracoin"] 
-    doc=oracoin.find_one({"server_id":message.chat.id})
-    if doc is None:
-        bot.reply_to(message, "Bot non inizializzato in questo server, fai /start")
-        return
-
-    #conn, cur = get_pg_cursor()
-    try:
-        # cur.execute('''
-        #     SELECT orascore, last_daily_claim FROM user_orascore
-        #     WHERE user_id = %s
-        # ''', (user_id,))
-
-        row = doc["data"].get(str(user_id))     
-        now = datetime.now()
-        print(now)
-
-        
-        can_claim = True
-        now_int = now.day + now.month*100 + now.year*10000
-        
-        if row and row["last_daily_claim"]:
-            last_claim = row["last_daily_claim"]
-            if now_int == last_claim:
-                can_claim = False
-                bot.reply_to(message, 
-                    f"Hai già riscosso la ricompensa giornaliera oggi!\n"
-                    f"Torna domani per riscuoterne un'altra.")
-        
-        if can_claim:
-            if row:
-                new_points = row["oracoins"] + 100
-                oracoin.update_one({"server_id":message.chat.id},{"$set":{f"data.{user_id}.oracoins":new_points,f"data.{user_id}.last_daily_claim":now_int}})
-                # cur.execute('''
-                #     UPDATE user_orascore
-                #     SET orascore = %s, 
-                #         last_daily_claim = %s 
-                #     WHERE user_id = %s
-                # ''', (new_points, now_int, user_id))
-            else:
-                oracoin.update_one({"server_id":message.chat.id},{"$set":{f"data.{user_id}":
-                                                                          {"oracoins":175,"last_daily_claim":now_int,"username":username, "locked_points":0}
-                                                                        }})
-                # cur.execute('''
-                #     INSERT INTO user_orascore 
-                #     (user_id, username, orascore, last_daily_claim) 
-                #     VALUES (%s, %s, 175, %s)
-                # ''', (user_id, username, now_int))
-            #
-            # conn.commit()
-            bot.reply_to(message, f"Ricompensa giornaliera di 75 Oracoins riscossa!\nOra {username} ha {get_orascore(message.chat.id,user_id)} punti.")
-            
-    finally:
-        pass
-    #   conn.close()
 
 @bot.message_handler(commands=['active_polls'])
 def active_polls(message):
@@ -887,30 +612,6 @@ def active_polls(message):
 #-----------------------------------------------------------------------------------------
 
 #FIX: l'intera implementazione di flagle assume che solo un gioco possa avvenire, questo non è compatibile con le sessioni
-
-
-# def update_flagpoints(user_id, delta, username=None):
-#     conn, cur = get_pg_cursor()
-#     try:
-#         cur.execute('SELECT flagpoints FROM user_flagpoints WHERE user_id = %s', (user_id,))
-#         row = cur.fetchone()
-#
-#         if row:
-#             new_points = max(0, row[0] + delta)
-#             cur.execute('''
-#                 UPDATE user_flagpoints 
-#                 SET flagpoints = %s
-#                 WHERE user_id = %s
-#             ''', (new_points, user_id))
-#         else:
-#             initial_points = max(0, delta)
-#             cur.execute('''
-#                 INSERT INTO user_flagpoints (user_id, username, flagpoints) 
-#                 VALUES (%s, %s, %s)
-#             ''', (user_id, username, initial_points))
-#         conn.commit()
-#     finally:
-#         conn.close()
 
 
 def download_flag(nazione, larghezza=1200):
@@ -1090,7 +791,6 @@ def guess(message, free = False):
                 secret_flag = ""
                 flagling = False
                 update_points(message,user_id,50,username)
-                #update_flagpoints(user_id, 8, username)
             else:
                 output_buffer = BytesIO()
                 secret_flag_original.save(output_buffer, format='PNG')
@@ -1101,14 +801,12 @@ def guess(message, free = False):
                 secret_flag = ""
                 flagling = False
                 update_points(message,starter_id,-20,starter_username)
-                #update_flagpoints(starter_id, -3, starter_username)
         elif not free:
             sent_flag = bot.send_photo(message.chat.id, updated_progress, 
                             caption=f"Errato! {username} ha perso 7 Oracoin!\nProgresso corrente:",
                             reply_to_message_id=message.id)
 
             update_points(message,user_id,-7,username)
-            #update_flagpoints(user_id, -1, username)
         else:
             sent_flag = bot.send_photo(message.chat.id, updated_progress, 
                             caption=f"Progresso corrente:",
@@ -1142,26 +840,5 @@ def arrendo(message):
         guess(mock_msg, True)
     else:
         bot.reply_to(message, f"Solo {starter_username} può decidere di arrendersi!")
-
-# @bot.message_handler(commands=['flagscore'])
-# def flagscore(message):
-#     conn, cur = get_pg_cursor()
-#     try:
-#         cur.execute('''
-#             SELECT username, flagpoints 
-#             FROM user_flagpoints 
-#             ORDER BY flagpoints DESC 
-#             LIMIT 12
-#         ''')
-#         rows = cur.fetchall()
-
-#         ranking = "Classifica FlagPoints:\n--------------------------\n"
-#         for username, points in rows:
-#             ranking += f"{username or 'Utente'}: {points}\n"
-
-#         bot.reply_to(message, ranking if rows else 'Nessun utente trovato.')
-#     finally:
-#         conn.close()
-
 
 bot.infinity_polling()
