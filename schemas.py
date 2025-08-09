@@ -9,7 +9,6 @@ class OracoinUser(TypedDict):
     username: str
     oracoins: int
     locked_points:int
-    last_daily_claim: int
 
 class Oracoin(TypedDict):
     server_id: int 
