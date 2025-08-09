@@ -215,5 +215,6 @@ map_flags = {
     "Republic of the congo": "the Republic of the Congo",
     "Saint kitts and nevis": "Saint Kitts and Nevis",
     "Saint vincent and the grenadines": "Saint Vincent and the Grenadines",
-    "São tomé and príncipe": "São Tomé and Príncipe"
+    "São tomé and príncipe": "São Tomé and Príncipe",
+    "Guinea-bissau": "Guinea-Bissau"
 }
