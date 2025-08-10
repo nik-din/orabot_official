@@ -14,7 +14,7 @@ from datetime import datetime
 from telebot.types import InlineQueryResultArticle, InputTextMessageContent
 
 from johnson import johnson_image
-from country_names import italian_names, english_names, italian_names_lower, english_names_lower, map_flags
+from country_names import italian_names, english_names, italian_names_lower, english_names_lower, map_flags, map_guess
 
 from keep_alive_ping import create_service
 
@@ -753,7 +753,9 @@ def guess(message, free = False):
         bot.reply_to(message, "Nessuna bandiera specificata.")
         return
     
-    if guessed_flag.lower() in italian_names_lower:
+    if guessed_flag in map_guess:
+        guessed_flag = map_guess[guessed_flag]
+    elif guessed_flag.lower() in italian_names_lower:
         guessed_flag = english_names[italian_names_lower.index(guessed_flag.lower())]
     elif guessed_flag.lower() not in english_names_lower:
         bot.reply_to(message, "Bandiera inesistente!")
