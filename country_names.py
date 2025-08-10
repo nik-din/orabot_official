@@ -217,8 +217,7 @@ map_flags = {
     "Saint vincent and the grenadines": "Saint Vincent and the Grenadines",
     "São tomé and príncipe": "São Tomé and Príncipe",
     "Guinea-bissau": "Guinea-Bissau",
-    "Guinea bissau": "Guinea-Bissau",
-    "Saint vincent and the grenadines": "Saint Vincent and the Grenadines"
+    "Guinea bissau": "Guinea-Bissau"
 }
 
 map_guess = {
