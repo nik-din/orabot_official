@@ -712,7 +712,9 @@ def flagle(message):
         flagling = False
         return
     secret_flag_progress = Image.new('RGB', secret_flag_original.size, (0, 0, 0))
-    free_flag = random.choice(english_names)
+    free_flag = secret_flag
+    while free_flag == secret_flag:
+        free_flag = random.choice(english_names)
     bot.reply_to(message, f"Un nuovo game di Flagle è iniziato. \nProva a indovinare la bandiera con /guess <bandiera>\nAvrai un primo aiuto gratis con la bandiera: {italian_names[english_names.index(free_flag)]}.")
     class MockMessage:
         def __init__(self, text, chat_id, message_id, from_user):
