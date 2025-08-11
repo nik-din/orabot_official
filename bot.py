@@ -615,6 +615,7 @@ def active_polls(message):
 
 
 def download_flag(nazione, larghezza=1200):
+    nazione = nazione.capitalize()
     if nazione in map_flags:
         nazione = map_flags[nazione]
         nome_file = "Flag_of_" + "_".join(word for word in nazione.split()) + ".svg"
