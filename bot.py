@@ -40,6 +40,8 @@ chat_flag_id = None
 guessed_by = []
 code = ""
 flagling = False
+flagled_done = []
+last_flagled = None
 
 
 
@@ -698,7 +700,7 @@ def flagle(message):
         return
 
 
-    global secret_flag, secret_flag_original, secret_flag_progress, flagling, flag_id, chat_flag_id, starter_id, starter_username
+    global secret_flag, secret_flag_original, secret_flag_progress, flagling, flag_id, chat_flag_id, starter_id, starter_username, last_flagled, flagled_done
     starter_id = message.from_user.id
     starter_username = message.from_user.username or message.from_user.first_name or 'Utente'
     if flagling:
@@ -706,6 +708,8 @@ def flagle(message):
         return
     secret_flag = random.choice(english_names)
     flagling = True
+    flagled_done = []
+    last_flagled = None
     print(f"Bandiera segreta: {secret_flag}")
     secret_flag_original = download_flag(secret_flag)
     if secret_flag_original is None:
@@ -742,7 +746,7 @@ def guess(message, free = False):
         bot.reply_to(message, "Bot non inizializzato in questo server, fai /start")
         return
 
-    global secret_flag, secret_flag_original, secret_flag_progress, flagling, flag_id, chat_flag_id, starter_username
+    global secret_flag, secret_flag_original, secret_flag_progress, flagling, flag_id, chat_flag_id, starter_username, last_flagled, flagled_done
     
     if not flagling:
         bot.reply_to(message, "Nessun game di flagle in corso.\nIniziane uno con /flagle.")
@@ -763,6 +767,11 @@ def guess(message, free = False):
     elif guessed_flag.lower() not in english_names_lower:
         bot.reply_to(message, "Bandiera inesistente!")
         return
+    
+    if guessed_flag in flagled_done:
+        bot.reply_to(message, "Questo tentativo è già stato fatto!")
+        return
+    flagled_done.append(guessed_flag)
 
     guessed_flag_img = download_flag(guessed_flag)
     if guessed_flag_img is None:
@@ -806,6 +815,8 @@ def guess(message, free = False):
                 secret_flag = ""
                 flagling = False
                 update_points(message,starter_id,-20,starter_username)
+            flagled_done = []
+            last_flagled = None
         elif not free:
             sent_flag = bot.send_photo(message.chat.id, updated_progress, 
                             caption=f"Errato! {username} ha perso 7 Oracoin!\nProgresso corrente:",
@@ -816,7 +827,18 @@ def guess(message, free = False):
             sent_flag = bot.send_photo(message.chat.id, updated_progress, 
                             caption=f"Progresso corrente:",
                             reply_to_message_id=message.id)
-            
+        
+        buffer = BytesIO()
+        if isinstance(updated_progress, BytesIO):
+            updated_progress.seek(0)
+            img = Image.open(updated_progress)
+        else:
+            img = updated_progress
+        img.save(buffer, format='PNG')
+
+        buffer.seek(0)
+        last_flagled = buffer
+
         flag_id = sent_flag.message_id
         chat_flag_id = sent_flag.chat.id
             
@@ -845,5 +867,38 @@ def arrendo(message):
         guess(mock_msg, True)
     else:
         bot.reply_to(message, f"Solo {starter_username} può decidere di arrendersi!")
+
+@bot.message_handler(commands=['flagled'])
+def flagled(message):
+    global flagled_done, last_flagled, flag_id, chat_flag_id
+
+    if not flagling:
+        bot.reply_to(message, "Nessuna partita di Flagle in corso!")
+        return
+    
+    if flag_id is not None and chat_flag_id is not None:
+        try:
+            bot.delete_message(chat_flag_id, flag_id)
+        except:
+            pass
+
+    msg = "Ecco la lista di tutti i tentativi già fatti:\n"
+    for guess in flagled_done:
+        if guess.lower() in english_names_lower:
+            guess = italian_names[english_names_lower.index(guess.lower())]
+        else:
+            continue
+        msg += f"{guess}\n"
+
+    if last_flagled:
+        last_flagled.seek(0)
+        sent_flag = bot.send_photo(message.chat.id, last_flagled, caption=msg, reply_to_message_id=message.id)
+        
+        flag_id = sent_flag.message_id
+        chat_flag_id = sent_flag.chat.id
+    else:
+        bot.reply_to(message, "Nessuna immagine di progresso disponibile.")
+
+
 
 bot.infinity_polling()
