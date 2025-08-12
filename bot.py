@@ -848,25 +848,21 @@ def guess(message, free = False):
 
 @bot.message_handler(commands=['arrendo'])
 def arrendo(message):
-    global starter_id, secret_flag, starter_username
+    global flagling, secret_flag, starter_id, starter_username, secret_flag_original
     if message.from_user.id == starter_id:
-        class MockMessage:
-            def __init__(self, text, chat_id, message_id, from_user):
-                self.text = text
-                self.chat = type('Chat', (), {'id': chat_id})
-                self.message_id = message_id + 1
-                self.from_user = from_user
-                self.id = message.id
-        
-        mock_msg = MockMessage(
-            text=f"/guess {secret_flag}",
-            chat_id=message.chat.id,
-            message_id=message.id,
-            from_user=message.from_user
-        )
-        guess(mock_msg, True)
+        if flagling and secret_flag:
+            output_buffer = BytesIO()
+            secret_flag_original.save(output_buffer, format='PNG')
+            output_buffer.seek(0)
+            bot.send_photo(message.chat.id, output_buffer, caption=f"La risposta corretta era: {secret_flag}, scarsi!\n{starter_username} ha perso 20 Oracoin!")
+            update_points(message, starter_id, -20, starter_username)
+            flagling = False
+            secret_flag = ""
+        else:
+            bot.reply_to(message, "Nessuna partita in corso!")
     else:
         bot.reply_to(message, f"Solo {starter_username} può decidere di arrendersi!")
+
 
 @bot.message_handler(commands=['flagled'])
 def flagled(message):
