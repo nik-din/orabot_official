@@ -221,5 +221,7 @@ map_flags = {
 }
 
 map_guess = {
-    "Usa": "United States"
+    "Usa": "United States",
+    "Eau": "United Arab Emirates",
+    "Uae": "United Arab Emirates"
 }
