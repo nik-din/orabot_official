@@ -613,7 +613,6 @@ def active_polls(message):
 #  |_|     |_____| /_/   \_\  \____| |_____| |_____|
 #-----------------------------------------------------------------------------------------
 
-#FIX: l'intera implementazione di flagle assume che solo un gioco possa avvenire, questo non è compatibile con le sessioni
 
 
 def download_flag(nazione, larghezza=1200):
@@ -690,37 +689,72 @@ def update_flag_progress(original, progress, guess_img, tolleranza=30):
 
     return output_buffer
 
+#
+flagle_sessions = {}
+
+def init_flagle_session(chat_id, starter_id, starter_username, secret_flag, secret_flag_original, secret_flag_progress):
+    flagle_sessions[chat_id] = {
+        "starter_id": starter_id,
+        "starter_username": starter_username,
+        "secret_flag": secret_flag,
+        "secret_flag_original": secret_flag_original,
+        "secret_flag_progress": secret_flag_progress,
+        "flagled_done": [],
+        "last_flagled": None,
+        "flag_id": None,
+        "chat_flag_id": None,
+        "flagling": True
+    }
+
+def get_session(chat_id):
+    return flagle_sessions.get(chat_id)
+
+def end_session(chat_id):
+    flagle_sessions.pop(chat_id, None)
+
 
 @bot.message_handler(commands=['flagle'])
 def flagle(message):
-    oracoin:Collection[Oracoin]=db["oracoin"] 
-    doc=oracoin.find_one({"server_id":message.chat.id})
+    oracoin: Collection[Oracoin] = db["oracoin"]
+    doc = oracoin.find_one({"server_id": message.chat.id})
     if doc is None:
         bot.reply_to(message, "Bot non inizializzato in questo server, fai /start")
         return
 
+    session = get_session(message.chat.id)
+    if session:
+        if session["flagling"]:
+            bot.reply_to(message, "Un'altra partita di Flagle è già in corso in questa chat.")
+            return
+        if session["flag_id"] is not None and session["chat_flag_id"] is not None:
+                try:
+                    bot.delete_message(session["chat_flag_id"], session["flag_id"])
+                except:
+                    pass
+    end_session(message.chat.id)
 
-    global secret_flag, secret_flag_original, secret_flag_progress, flagling, flag_id, chat_flag_id, starter_id, starter_username, last_flagled, flagled_done
     starter_id = message.from_user.id
     starter_username = message.from_user.username or message.from_user.first_name or 'Utente'
-    if flagling:
-        bot.reply_to(message, "Un'altra partita di flagle è già in corso.")
-        return
+
     secret_flag = random.choice(english_names)
-    flagling = True
-    flagled_done = []
-    last_flagled = None
-    print(f"Bandiera segreta: {secret_flag}")
+    print(f"[FLAGLE] Bandiera segreta: {secret_flag}")
     secret_flag_original = download_flag(secret_flag)
-    if secret_flag_original is None:
+    if not secret_flag_original:
         bot.reply_to(message, "Errore nel caricamento della bandiera segreta. Riprova.")
-        flagling = False
         return
+
     secret_flag_progress = Image.new('RGB', secret_flag_original.size, (0, 0, 0))
+
     free_flag = secret_flag
     while free_flag == secret_flag:
         free_flag = random.choice(english_names)
-    bot.reply_to(message, f"Un nuovo game di Flagle è iniziato. \nProva a indovinare la bandiera con /guess <bandiera>\nAvrai un primo aiuto gratis con la bandiera: {italian_names[english_names.index(free_flag)]}.")
+
+    init_flagle_session(message.chat.id, starter_id, starter_username, secret_flag, secret_flag_original, secret_flag_progress)
+
+    bot.reply_to(message,
+                 f"Un nuovo game di Flagle è iniziato.\nProva a indovinare la bandiera con /guess <bandiera>\n"
+                 f"Avrai un primo aiuto gratis con la bandiera: {italian_names[english_names.index(free_flag)]}.")
+
     class MockMessage:
         def __init__(self, text, chat_id, message_id, from_user):
             self.text = text
@@ -728,7 +762,7 @@ def flagle(message):
             self.message_id = message_id
             self.from_user = from_user
             self.id = message.id
-    
+
     mock_msg = MockMessage(
         text=f"/guess {free_flag}",
         chat_id=message.chat.id,
@@ -739,27 +773,26 @@ def flagle(message):
 
 
 @bot.message_handler(commands=['guess'])
-def guess(message, free = False):
-    oracoin:Collection[Oracoin]=db["oracoin"] 
-    doc=oracoin.find_one({"server_id":message.chat.id})
+def guess(message, free=False):
+    oracoin: Collection[Oracoin] = db["oracoin"]
+    doc = oracoin.find_one({"server_id": message.chat.id})
     if doc is None:
         bot.reply_to(message, "Bot non inizializzato in questo server, fai /start")
         return
 
-    global secret_flag, secret_flag_original, secret_flag_progress, flagling, flag_id, chat_flag_id, starter_username, last_flagled, flagled_done
-    
-    if not flagling:
-        bot.reply_to(message, "Nessun game di flagle in corso.\nIniziane uno con /flagle.")
+    session = get_session(message.chat.id)
+    if not session or not session["flagling"]:
+        bot.reply_to(message, "Nessun game di Flagle in corso.\nIniziane uno con /flagle.")
         return
-        
+
     username = message.from_user.username or message.from_user.first_name or 'Utente'
     user_id = message.from_user.id
     guessed_flag = get_text(message.text).replace('_', ' ').capitalize().strip()
-    
+
     if not guessed_flag:
         bot.reply_to(message, "Nessuna bandiera specificata.")
         return
-    
+
     if guessed_flag in map_guess:
         guessed_flag = map_guess[guessed_flag]
     elif guessed_flag.lower() in italian_names_lower:
@@ -767,67 +800,61 @@ def guess(message, free = False):
     elif guessed_flag.lower() not in english_names_lower:
         bot.reply_to(message, "Bandiera inesistente!")
         return
-    
-    if guessed_flag in flagled_done:
+
+    if guessed_flag in session["flagled_done"]:
         bot.reply_to(message, "Questo tentativo è già stato fatto!")
         return
-    flagled_done.append(guessed_flag)
+    session["flagled_done"].append(guessed_flag)
 
     guessed_flag_img = download_flag(guessed_flag)
-    if guessed_flag_img is None:
+    if not guessed_flag_img:
         bot.reply_to(message, "Errore nel caricamento della bandiera, riprova.")
         return
-    
-    print(f"Guess: {guessed_flag}")
-    
+
+    print(f"[FLAGLE] Guess: {guessed_flag}")
+
     try:
-        current_progress = Image.open(secret_flag_progress) if isinstance(secret_flag_progress, BytesIO) else secret_flag_progress
-        
-        updated_progress = update_flag_progress(secret_flag_original, current_progress, guessed_flag_img)
-        
-        secret_flag_progress = Image.open(updated_progress)
+        current_progress = Image.open(session["secret_flag_progress"]) if isinstance(session["secret_flag_progress"], BytesIO) else session["secret_flag_progress"]
+
+        updated_progress = update_flag_progress(session["secret_flag_original"], current_progress, guessed_flag_img)
+
+        session["secret_flag_progress"] = Image.open(updated_progress)
         updated_progress.seek(0)
 
-        if flag_id is not None and chat_flag_id is not None:
+        if session["flag_id"] is not None and session["chat_flag_id"] is not None:
             try:
-                bot.delete_message(chat_flag_id, flag_id)
+                bot.delete_message(session["chat_flag_id"], session["flag_id"])
             except:
                 pass
-        
-        if guessed_flag == secret_flag:
-            if not free:
-                output_buffer = BytesIO()
-                secret_flag_original.save(output_buffer, format='PNG')
-                output_buffer.seek(0)
-                sent_flag = bot.send_photo(message.chat.id, output_buffer, 
-                                caption=f"Corretto!\n{username} ha guadagnato 50 Oracoin!", 
-                                reply_to_message_id=message.id)
-                secret_flag = ""
-                flagling = False
-                update_points(message,user_id,50,username)
-            else:
-                output_buffer = BytesIO()
-                secret_flag_original.save(output_buffer, format='PNG')
-                output_buffer.seek(0)
-                sent_flag = bot.send_photo(message.chat.id, output_buffer, 
-                                caption=f"La risposta corretta era: {secret_flag}, scarsi!\n{starter_username} ha perso 20 Oracoin!", 
-                                reply_to_message_id=message.id)
-                secret_flag = ""
-                flagling = False
-                update_points(message,starter_id,-20,starter_username)
-            flagled_done = []
-            last_flagled = None
-        elif not free:
-            sent_flag = bot.send_photo(message.chat.id, updated_progress, 
-                            caption=f"Errato! {username} ha perso 7 Oracoin!\nProgresso corrente:",
-                            reply_to_message_id=message.id)
 
-            update_points(message,user_id,-7,username)
+        if guessed_flag == session["secret_flag"]:
+            output_buffer = BytesIO()
+            session["secret_flag_original"].save(output_buffer, format='PNG')
+            output_buffer.seek(0)
+
+            if not free:
+                sent_flag = bot.send_photo(message.chat.id, output_buffer,
+                                           caption=f"Corretto!\n{username} ha guadagnato 50 Oracoin!",
+                                           reply_to_message_id=message.id)
+                update_points(message, user_id, 50, username)
+            else:
+                sent_flag = bot.send_photo(message.chat.id, output_buffer,
+                                           caption=f"La risposta corretta era: {session['secret_flag']}, scarsi!\n"
+                                                   f"{session['starter_username']} ha perso 20 Oracoin!",
+                                           reply_to_message_id=message.id)
+                update_points(message, session["starter_id"], -20, session["starter_username"])
+            
+            session["flagling"] = False
+        elif not free:
+            sent_flag = bot.send_photo(message.chat.id, updated_progress,
+                                       caption=f"Errato! {username} ha perso 7 Oracoin!\nProgresso corrente:",
+                                       reply_to_message_id=message.id)
+            update_points(message, user_id, -7, username)
         else:
-            sent_flag = bot.send_photo(message.chat.id, updated_progress, 
-                            caption=f"Progresso corrente:",
-                            reply_to_message_id=message.id)
-        
+            sent_flag = bot.send_photo(message.chat.id, updated_progress,
+                                       caption=f"Progresso corrente:",
+                                       reply_to_message_id=message.id)
+
         buffer = BytesIO()
         if isinstance(updated_progress, BytesIO):
             updated_progress.seek(0)
@@ -835,66 +862,72 @@ def guess(message, free = False):
         else:
             img = updated_progress
         img.save(buffer, format='PNG')
-
         buffer.seek(0)
-        last_flagled = buffer
+        session["last_flagled"] = buffer
 
-        flag_id = sent_flag.message_id
-        chat_flag_id = sent_flag.chat.id
-            
+        session["flag_id"] = sent_flag.message_id
+        session["chat_flag_id"] = sent_flag.chat.id
+
     except Exception as e:
         print(f"Errore durante l'aggiornamento del progresso: {str(e)}")
         bot.reply_to(message, "Si è verificato un errore durante l'elaborazione. Riprova.")
 
+
 @bot.message_handler(commands=['arrendo'])
 def arrendo(message):
-    global flagling, secret_flag, starter_id, starter_username, secret_flag_original
-    if message.from_user.id == starter_id:
-        if flagling and secret_flag:
-            output_buffer = BytesIO()
-            secret_flag_original.save(output_buffer, format='PNG')
-            output_buffer.seek(0)
-            bot.send_photo(message.chat.id, output_buffer, caption=f"La risposta corretta era: {secret_flag}, scarsi!\n{starter_username} ha perso 20 Oracoin!")
-            update_points(message, starter_id, -20, starter_username)
-            flagling = False
-            secret_flag = ""
-        else:
-            bot.reply_to(message, "Nessuna partita in corso!")
+    session = get_session(message.chat.id)
+    if not session or not session["flagling"]:
+        bot.reply_to(message, "Nessuna partita in corso!")
+        return
+    if session["flag_id"] is not None and session["chat_flag_id"] is not None:
+        try:
+            bot.delete_message(session["chat_flag_id"], session["flag_id"])
+        except:
+            pass
+
+    if message.from_user.id == session["starter_id"]:
+        output_buffer = BytesIO()
+        session["secret_flag_original"].save(output_buffer, format='PNG')
+        output_buffer.seek(0)
+        sent_flag = bot.send_photo(message.chat.id, output_buffer,
+                       caption=f"La risposta corretta era: {session['secret_flag']}, scarsi!\n"
+                               f"{session['starter_username']} ha perso 20 Oracoin!")
+        update_points(message, session["starter_id"], -20, session["starter_username"])
+        session["flagling"] = False
+        session["flag_id"] = sent_flag.message_id
+        session["chat_flag_id"] = sent_flag.chat.id
     else:
-        bot.reply_to(message, f"Solo {starter_username} può decidere di arrendersi!")
+        bot.reply_to(message, f"Solo {session['starter_username']} può decidere di arrendersi!")
 
 
 @bot.message_handler(commands=['flagled'])
 def flagled(message):
-    global flagled_done, last_flagled, flag_id, chat_flag_id
-
-    if not flagling:
+    session = get_session(message.chat.id)
+    if not session or not session["flagling"]:
         bot.reply_to(message, "Nessuna partita di Flagle in corso!")
         return
-    
-    if flag_id is not None and chat_flag_id is not None:
+
+    if session["flag_id"] is not None and session["chat_flag_id"] is not None:
         try:
-            bot.delete_message(chat_flag_id, flag_id)
+            bot.delete_message(session["chat_flag_id"], session["flag_id"])
         except:
             pass
 
     msg = "Ecco la lista di tutti i tentativi già fatti:\n"
-    for guess in flagled_done:
+    for guess in session["flagled_done"]:
         if guess.lower() in english_names_lower:
             guess = italian_names[english_names_lower.index(guess.lower())]
         else:
             continue
         msg += f"{guess}\n"
 
-    if last_flagled:
-        last_flagled.seek(0)
-        sent_flag = bot.send_photo(message.chat.id, last_flagled, caption=msg, reply_to_message_id=message.id)
-        
-        flag_id = sent_flag.message_id
-        chat_flag_id = sent_flag.chat.id
+    if session["last_flagled"]:
+        session["last_flagled"].seek(0)
+        sent_flag = bot.send_photo(message.chat.id, session["last_flagled"], caption=msg, reply_to_message_id=message.id)
+        session["flag_id"] = sent_flag.message_id
+        session["chat_flag_id"] = sent_flag.chat.id
     else:
         bot.reply_to(message, "Nessuna immagine di progresso disponibile.")
-
 
 
 bot.infinity_polling()
