@@ -50,6 +50,12 @@ def get_text(message):
     words = message.replace('\n', ' \n').split()
     return ' '.join(words[1:])
 
+def escape_markdown_v2(text):
+    chars_to_escape = ['-', '_', '(', ')', '+']
+    for char in chars_to_escape:
+        text = text.replace(char, f'\\{char}')
+    return text
+
 @bot.message_handler(commands=['start'])
 def start(message):
 
@@ -603,7 +609,7 @@ def active_polls(message):
             table.append(option)
         actives += f"`{tabulate.tabulate(table, headers, tablefmt="simple")}`\n------------------------------------\n"
     print(actives)
-    bot.reply_to(message, actives.replace('-', '\\-').replace('_', '\\_'), parse_mode='MarkdownV2')
+    bot.reply_to(message, escape_markdown_v2(actives), parse_mode='MarkdownV2')
     
 #-----------------------------------------------------------------------------------------
 #   _____   _          _       ____   _       _____ 
